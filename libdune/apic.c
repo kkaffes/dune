@@ -23,7 +23,7 @@
  * implementation of this function. Note that this function only supports
  * x2APIC, not xAPIC.
  */
-void apic_send_ipi(uint8_t vector, uint32_t destination_apic_id) {
+void dune_apic_send_ipi(uint8_t vector, uint32_t destination_apic_id) {
 	uint64_t to_write = 0x0;
 	//write the vector number to the least significant 8 bits
 	to_write |= vector;
@@ -41,7 +41,7 @@ void apic_send_ipi(uint8_t vector, uint32_t destination_apic_id) {
  * that executes this function to indicate that the interrupt handler has
  * finished.
 */
-void apic_eoi() {
+void dune_apic_eoi() {
 	//TODO: 32 or 64 bits? Does it matter?
 	wrmsrl(EOI_MSR_ADDR, EOI_ACK);
 }

@@ -116,6 +116,11 @@ extern void dune_ret_from_user(int ret)  __attribute__ ((noreturn));
 extern void dune_dump_trap_frame(struct dune_tf *tf);
 extern void dune_passthrough_syscall(struct dune_tf *tf);
 
+// x2APIC
+
+extern void dune_apic_send_ipi(uint8_t vector, uint32_t destination_apic_id);
+extern void dune_apic_eoi();
+
 // page allocation
 
 SLIST_HEAD(page_head, page);
