@@ -354,7 +354,8 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	u32 _vmexit_control = 0;
 	u32 _vmentry_control = 0;
 
-	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING;
+	//TODO: Move [PIN_BASED_POST_INTR] to optional variable [opt]
+	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING | PIN_BASED_POSTED_INTR;
 	opt = PIN_BASED_VIRTUAL_NMIS;
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_PINBASED_CTLS,
 				&_pin_based_exec_control) < 0)
@@ -383,7 +384,11 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 					   ~CPU_BASED_CR8_STORE_EXITING;
 #endif
 	if (_cpu_based_exec_control & CPU_BASED_ACTIVATE_SECONDARY_CONTROLS) {
-		min2 = 0;
+		//TODO: Move [SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE] and [SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY]
+		//to optional [opt]
+		min2 =  SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE |
+			SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY;
+		
 		opt2 =  SECONDARY_EXEC_WBINVD_EXITING |
 			SECONDARY_EXEC_ENABLE_VPID |
 			SECONDARY_EXEC_ENABLE_EPT |
