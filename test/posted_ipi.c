@@ -1,8 +1,11 @@
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
+#include <sched.h>
 
 #include "libdune/dune.h"
-#include "libdune/cpu-x86.h"
 
 #define THREAD_2_CORE 10
 #define TEST_VECTOR 0xf2
@@ -18,6 +21,7 @@ static void test_handler(struct dune_tf *tf)
 }
 
 void *t2_start(void *arg) {
+	//TODO: Set IF to 1
 	volatile int ret = dune_enter();
 	if (ret) {
 		printf("posted_ipi: failed to enter dune in thread 2\n");
