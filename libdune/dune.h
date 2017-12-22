@@ -118,8 +118,9 @@ extern void dune_passthrough_syscall(struct dune_tf *tf);
 
 // x2APIC
 
+extern uint32_t dune_apic_id(void);
 extern void dune_apic_send_ipi(uint8_t vector, uint32_t destination_apic_id);
-extern void dune_apic_eoi();
+extern void dune_apic_eoi(void);
 
 // page allocation
 

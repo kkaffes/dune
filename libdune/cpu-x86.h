@@ -35,6 +35,10 @@ static inline unsigned long long native_read_msr(unsigned int msr)
 #define MSR_KERNEL_GS_BASE	0xc0000102
 #define MSR_LSTAR		0xc0000082 /* long mode SYSCALL target */
 
+#define MSR_X2APIC_ID 0x802
+#define MSR_X2APIC_ICR 0x830
+#define MSR_X2APIC_EOI 0x80B
+
 struct tptr {
 	uint16_t	limit;
 	uint64_t	base;

@@ -6,8 +6,10 @@
 #include <sched.h>
 
 #include "libdune/dune.h"
+#include "libdune/cpu-x86.h"
 
 #define THREAD_2_CORE 10
+#define THREAD_2_LOCAL_APIC_ID 40
 #define TEST_VECTOR 0xf2
 
 volatile bool t2_ready = false;
@@ -18,6 +20,7 @@ static void test_handler(struct dune_tf *tf)
 	printf("posted_ipi: received posted IPI!\n");
 	received_posted_ipi = true;
 	//TODO: Send EOI
+	dune_apic_eoi();
 }
 
 void *t2_start(void *arg) {
@@ -27,6 +30,9 @@ void *t2_start(void *arg) {
 		printf("posted_ipi: failed to enter dune in thread 2\n");
 		return NULL;
 	}
+        
+        printf("APID ID (thread 2): %lu\n", dune_apic_id());	
+	
 	dune_register_intr_handler(TEST_VECTOR, test_handler);
 	//TODO: Is this memory fence necessary?
 	asm volatile("mfence" ::: "memory");
@@ -61,7 +67,11 @@ int main(int argc, char *argv[])
 	while (!t2_ready);
 	//TODO: Is this memory fence necessary?
 	asm volatile("mfence" ::: "memory");
+
+        printf("APID ID: %lu\n", dune_apic_id());
+
 	//TODO: Send posted IPI
+	dune_apic_send_ipi(TEST_VECTOR, 40);
 
 	pthread_join(t2, NULL);
 

@@ -1,15 +1,21 @@
 /* These functions are used to send and receive posted IPIs with an x2APIC.
 */
 
-#include "dune.h"
-#include <arch/x86/include/asm/msr.h>
+#define _GNU_SOURCE
 
-//the MSR address of the Interrupt Command Register
-#define ICR_MSR_ADDR 0x830
-//the MSR address of the End-of-Interrupt Register
-#define EOI_MSR_ADDR 0x80B
+#include <malloc.h>
+
+#include "dune.h"
+#include "cpu-x86.h"
+
 //the value to write to the EOI register when an interrupt handler has finished
 #define EOI_ACK 0x0
+
+uint32_t dune_apic_id() {
+	long long apic_id;
+	rdmsrl(0x802, apic_id);
+	return (uint32_t)apic_id;
+}
 
 /* apic_send_ipi
  * Sends a posted IPI to an x2APIC.
@@ -33,7 +39,7 @@ void dune_apic_send_ipi(uint8_t vector, uint32_t destination_apic_id) {
 	//[to_write] is initialized to 0, so the remaining bits are all 0
 	
 	//now write [to_write] to the MSR for the ICR
-	wrmsrl(ICR_MSR_ADDR, to_write);
+	wrmsrl(MSR_X2APIC_ICR, to_write);
 }
 
 /* apic_eoi
@@ -43,5 +49,5 @@ void dune_apic_send_ipi(uint8_t vector, uint32_t destination_apic_id) {
 */
 void dune_apic_eoi() {
 	//TODO: 32 or 64 bits? Does it matter?
-	wrmsrl(EOI_MSR_ADDR, EOI_ACK);
+	wrmsrl(MSR_X2APIC_EOI, EOI_ACK);
 }

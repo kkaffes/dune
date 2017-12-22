@@ -67,6 +67,11 @@ static atomic_t vmx_enable_failed;
 static DECLARE_BITMAP(vmx_vpid_bitmap, VMX_NR_VPIDS);
 static DEFINE_SPINLOCK(vmx_vpid_lock);
 
+//TODO: Should these definitions be moved elsewhere?
+#define MSR_X2APIC_ID 0x802
+#define MSR_X2APIC_ICR 0x830
+#define MSR_X2APIC_EOI 0x80B
+
 static unsigned long *msr_bitmap;
 
 #define NUM_SYSCALLS 312
@@ -355,7 +360,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	u32 _vmentry_control = 0;
 
 	//TODO: Move [PIN_BASED_POST_INTR] to optional variable [opt]
-	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING | PIN_BASED_POSTED_INTR;
+	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING;/// | PIN_BASED_POSTED_INTR;
 	opt = PIN_BASED_VIRTUAL_NMIS;
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_PINBASED_CTLS,
 				&_pin_based_exec_control) < 0)
@@ -386,8 +391,8 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	if (_cpu_based_exec_control & CPU_BASED_ACTIVATE_SECONDARY_CONTROLS) {
 		//TODO: Move [SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE] and [SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY]
 		//to optional [opt]
-		min2 =  SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE |
-			SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY;
+		min2 =  SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE; // |
+			//SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY;
 		
 		opt2 =  SECONDARY_EXEC_WBINVD_EXITING |
 			SECONDARY_EXEC_ENABLE_VPID |
@@ -416,7 +421,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 
 	min = 0;
 #ifdef CONFIG_X86_64
-	min |= VM_EXIT_HOST_ADDR_SPACE_SIZE;
+	min |= VM_EXIT_HOST_ADDR_SPACE_SIZE | VM_EXIT_ACK_INTR_ON_EXIT;
 #endif
 //	opt = VM_EXIT_SAVE_IA32_PAT | VM_EXIT_LOAD_IA32_PAT;
 	opt = 0;
@@ -1687,6 +1692,9 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 			vcpu->ret_code = DUNE_RET_UNHANDLED_VMEXIT;
 			vmx_dump_cpu(vcpu);
 			done = 1;
+		} else if (ret == EXIT_REASON_EXTERNAL_INTERRUPT) {
+			printk(KERN_INFO "exit on core %d, reason %d (interrupt info: %x)\n", 
+			       smp_processor_id(), ret, vmcs_read32(VM_EXIT_INTR_INFO));
 		}
 
 		if (done || vcpu->shutdown)
@@ -1831,6 +1839,11 @@ __init int vmx_init(void)
 	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_GS_BASE);
 	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_PKG_ENERGY_STATUS);
 	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_RAPL_POWER_UNIT);
+
+	//allow access to the virtual x2APIC MSRs
+	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_X2APIC_ID);
+	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_X2APIC_ICR);
+	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_X2APIC_EOI);
 
 	set_bit(0, vmx_vpid_bitmap); /* 0 is reserved for host */
 
