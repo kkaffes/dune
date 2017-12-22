@@ -421,7 +421,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 
 	min = 0;
 #ifdef CONFIG_X86_64
-	min |= VM_EXIT_HOST_ADDR_SPACE_SIZE | VM_EXIT_ACK_INTR_ON_EXIT;
+	min |= VM_EXIT_HOST_ADDR_SPACE_SIZE; //| VM_EXIT_ACK_INTR_ON_EXIT;
 #endif
 //	opt = VM_EXIT_SAVE_IA32_PAT | VM_EXIT_LOAD_IA32_PAT;
 	opt = 0;
@@ -1693,8 +1693,8 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 			vmx_dump_cpu(vcpu);
 			done = 1;
 		} else if (ret == EXIT_REASON_EXTERNAL_INTERRUPT) {
-			printk(KERN_INFO "exit on core %d, reason %d (interrupt info: %x)\n", 
-			       smp_processor_id(), ret, vmcs_read32(VM_EXIT_INTR_INFO));
+			//printk(KERN_INFO "exit on core %d, reason %d (interrupt info: %x)\n", 
+			//       smp_processor_id(), ret, vmcs_read32(VM_EXIT_INTR_INFO));
 		}
 
 		if (done || vcpu->shutdown)
