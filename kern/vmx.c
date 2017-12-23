@@ -61,6 +61,7 @@
 #include "dune.h"
 #include "vmx.h"
 #include "compat.h"
+#include "apic.h"
 
 static atomic_t vmx_enable_failed;
 
@@ -73,6 +74,7 @@ static DEFINE_SPINLOCK(vmx_vpid_lock);
 #define MSR_X2APIC_EOI 0x80B
 
 static unsigned long *msr_bitmap;
+static void *virtual_apic_pages[NR_CPUS];
 
 #define NUM_SYSCALLS 312
 
@@ -360,7 +362,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	u32 _vmentry_control = 0;
 
 	//TODO: Move [PIN_BASED_POST_INTR] to optional variable [opt]
-	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING;/// | PIN_BASED_POSTED_INTR;
+	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING; // | PIN_BASED_POSTED_INTR;
 	opt = PIN_BASED_VIRTUAL_NMIS;
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_PINBASED_CTLS,
 				&_pin_based_exec_control) < 0)
@@ -391,8 +393,9 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	if (_cpu_based_exec_control & CPU_BASED_ACTIVATE_SECONDARY_CONTROLS) {
 		//TODO: Move [SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE] and [SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY]
 		//to optional [opt]
-		min2 =  SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE; // |
-			//SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY;
+		min2 = 	SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE |
+			SECONDARY_EXEC_APIC_REGISTER_VIRT |
+			SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY;
 		
 		opt2 =  SECONDARY_EXEC_WBINVD_EXITING |
 			SECONDARY_EXEC_ENABLE_VPID |
@@ -936,7 +939,43 @@ static void setup_msr(struct vmx_vcpu *vcpu)
 	vmcs_write64(VM_ENTRY_MSR_LOAD_ADDR, __pa(vcpu->msr_autoload.guest));
 }
 
-/**
+enum vapic_reg {
+	LOCAL_APIC_ID
+};
+
+static void vapic_write(void *vapic_page, enum vapic_reg reg, uint64_t value) {
+	size_t offset = 0x0;
+	switch (reg) {
+		case (LOCAL_APIC_ID):
+			offset = 0x20;
+			break;
+		default:
+			return;
+			break;
+	}
+	*(uint64_t *)((char *)vapic_page + offset) = value;
+}
+
+static void setup_vapic(struct vmx_vcpu *vcpu)
+{
+	void *vapic_page;
+	u32 local_apic_id;
+	
+	vapic_page = virtual_apic_pages[vcpu->vpid];
+	memset(vapic_page, 0x00, PAGE_SIZE);
+	
+	//get the local APIC ID
+	local_apic_id = read_apic_id();
+	apic_map[raw_smp_processor_id()] = (struct apic_map)
+					   { .core = raw_smp_processor_id(), 
+					     .local_apic_id = local_apic_id };
+	vapic_write(vapic_page, LOCAL_APIC_ID, local_apic_id);
+
+	//add the virtual apic page physical address to the VMCS
+	vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, __pa(vapic_page));
+}
+
+/*
  *  vmx_setup_vmcs - configures the vmcs with starting parameters
  */
 static void vmx_setup_vmcs(struct vmx_vcpu *vcpu)
@@ -963,6 +1002,7 @@ static void vmx_setup_vmcs(struct vmx_vcpu *vcpu)
 	vmcs_write32(CR3_TARGET_COUNT, 0);           /* 22.2.1 */
 
 	setup_msr(vcpu);
+	setup_vapic(vcpu);
 #if 0
 	if (vmcs_config.vmentry_ctrl & VM_ENTRY_LOAD_IA32_PAT) {
 		u32 msr_low, msr_high;
@@ -1844,6 +1884,13 @@ __init int vmx_init(void)
 	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_X2APIC_ID);
 	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_X2APIC_ICR);
 	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_X2APIC_EOI);
+
+	for_each_possible_cpu(cpu) {
+		virtual_apic_pages[cpu] = (void *)__get_free_page(GFP_KERNEL);
+		if (!virtual_apic_pages[cpu]) {
+			return -ENOMEM;
+		}
+	} 
 
 	set_bit(0, vmx_vpid_bitmap); /* 0 is reserved for host */
 

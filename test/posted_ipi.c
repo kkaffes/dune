@@ -9,7 +9,7 @@
 #include "libdune/cpu-x86.h"
 
 #define THREAD_2_CORE 10
-#define THREAD_2_LOCAL_APIC_ID 40
+#define THREAD_2_LOCAL_APIC_ID 24
 #define TEST_VECTOR 0xf2
 
 volatile bool t2_ready = false;
@@ -31,7 +31,7 @@ void *t2_start(void *arg) {
 		return NULL;
 	}
         
-        printf("APID ID (thread 2): %lu\n", dune_apic_id());	
+        printf("APID ID (thread 2): %u\n", dune_apic_id());	
 	
 	dune_register_intr_handler(TEST_VECTOR, test_handler);
 	//TODO: Is this memory fence necessary?
@@ -68,10 +68,11 @@ int main(int argc, char *argv[])
 	//TODO: Is this memory fence necessary?
 	asm volatile("mfence" ::: "memory");
 
-        printf("APID ID: %lu\n", dune_apic_id());
+	printf("HERE\n");
+        printf("APID ID: %u\n", dune_apic_id());
 
 	//TODO: Send posted IPI
-	dune_apic_send_ipi(TEST_VECTOR, 40);
+	//dune_apic_send_ipi(TEST_VECTOR, THREAD_2_LOCAL_APIC_ID);
 
 	pthread_join(t2, NULL);
 
