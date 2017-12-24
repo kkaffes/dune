@@ -72,9 +72,11 @@ static DEFINE_SPINLOCK(vmx_vpid_lock);
 #define MSR_X2APIC_ID 0x802
 #define MSR_X2APIC_ICR 0x830
 #define MSR_X2APIC_EOI 0x80B
+#define POSTED_INTERRUPT_NOTIFICATION_VECTOR 0xf2
 
 static unsigned long *msr_bitmap;
 static void *virtual_apic_pages[NR_CPUS];
+static void *posted_interrupt_descriptors[NR_CPUS];
 
 #define NUM_SYSCALLS 312
 
@@ -362,12 +364,12 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	u32 _vmentry_control = 0;
 
 	//TODO: Move [PIN_BASED_POST_INTR] to optional variable [opt]
-	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING; // | PIN_BASED_POSTED_INTR;
+	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING | PIN_BASED_POSTED_INTR;
 	opt = PIN_BASED_VIRTUAL_NMIS;
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_PINBASED_CTLS,
 				&_pin_based_exec_control) < 0)
 		return -EIO;
-
+	
 	min =
 #ifdef CONFIG_X86_64
 	      CPU_BASED_CR8_LOAD_EXITING |
@@ -393,7 +395,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	if (_cpu_based_exec_control & CPU_BASED_ACTIVATE_SECONDARY_CONTROLS) {
 		//TODO: Move [SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE] and [SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY]
 		//to optional [opt]
-		min2 = 	SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE |
+		min2 =  SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE |
 			SECONDARY_EXEC_APIC_REGISTER_VIRT |
 			SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY;
 		
@@ -958,7 +960,7 @@ static void vapic_write(void *vapic_page, enum vapic_reg reg, uint64_t value) {
 
 static void setup_vapic(struct vmx_vcpu *vcpu)
 {
-	void *vapic_page;
+	void *vapic_page, *posted_interrupt_descriptor;
 	u32 local_apic_id;
 	
 	vapic_page = virtual_apic_pages[vcpu->vpid];
@@ -973,6 +975,13 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
 
 	//add the virtual apic page physical address to the VMCS
 	vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, __pa(vapic_page));
+
+	//now handle posted interrupts
+	vmcs_write16(POSTED_INTR_NV, POSTED_INTERRUPT_NOTIFICATION_VECTOR);
+	posted_interrupt_descriptor = posted_interrupt_descriptors[vcpu->vpid];
+	memset(posted_interrupt_descriptor, 0x00, PAGE_SIZE);
+	printk(KERN_INFO "Posted interrupt descriptor %lx\n", __pa(posted_interrupt_descriptor));
+	vmcs_write64(POSTED_INTR_DESC_ADDR, __pa(posted_interrupt_descriptor));
 }
 
 /*
@@ -1726,15 +1735,14 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 		else if (ret == EXIT_REASON_EXCEPTION_NMI) {
 			if (vmx_handle_nmi_exception(vcpu))
 				done = 1;
+		} else if (ret == EXIT_REASON_MSR_WRITE) {
+			printk(KERN_INFO "Need to handle MSR write\n");
 		} else if (ret != EXIT_REASON_EXTERNAL_INTERRUPT) {
 			printk(KERN_INFO "unhandled exit: reason %d, exit qualification %x\n",
 			       ret, vmcs_read32(EXIT_QUALIFICATION));
 			vcpu->ret_code = DUNE_RET_UNHANDLED_VMEXIT;
 			vmx_dump_cpu(vcpu);
 			done = 1;
-		} else if (ret == EXIT_REASON_EXTERNAL_INTERRUPT) {
-			//printk(KERN_INFO "exit on core %d, reason %d (interrupt info: %x)\n", 
-			//       smp_processor_id(), ret, vmcs_read32(VM_EXIT_INTR_INFO));
 		}
 
 		if (done || vcpu->shutdown)
@@ -1888,6 +1896,12 @@ __init int vmx_init(void)
 	for_each_possible_cpu(cpu) {
 		virtual_apic_pages[cpu] = (void *)__get_free_page(GFP_KERNEL);
 		if (!virtual_apic_pages[cpu]) {
+			return -ENOMEM;
+		}
+		//each descriptor only needs to be 64 bytes... does giving a page really matter?
+		//if the size is changed, be sure to update setup_vapic()
+		posted_interrupt_descriptors[cpu] = (void *)__get_free_page(GFP_KERNEL);
+		if (!posted_interrupt_descriptors[cpu]) {
 			return -ENOMEM;
 		}
 	} 

@@ -33,13 +33,16 @@ void dune_apic_send_ipi(uint8_t vector, uint32_t destination_apic_id) {
 	uint64_t to_write = 0x0;
 	//write the vector number to the least significant 8 bits
 	to_write |= vector;
+	//set level to ASSERT
+	to_write |= 1 << 14;
 	//write the destination to the most significant 32 bits
 	to_write |= ((uint64_t) destination_apic_id) << 32;
 
 	//[to_write] is initialized to 0, so the remaining bits are all 0
-	
+	printf("ICR value %lx\n", to_write);
 	//now write [to_write] to the MSR for the ICR
-	wrmsrl(MSR_X2APIC_ICR, to_write);
+	wrmsrl(0x830, to_write);
+	printf("DONE\n");
 }
 
 /* apic_eoi
