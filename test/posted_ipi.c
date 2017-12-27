@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
         printf("APID ID: %u\n", dune_apic_id());
 
 	//TODO: Send posted IPI
-	dune_apic_send_ipi(TEST_VECTOR, THREAD_2_LOCAL_APIC_ID);
+	//dune_apic_send_ipi(TEST_VECTOR, THREAD_2_LOCAL_APIC_ID);
 
 	pthread_join(t2, NULL);
 

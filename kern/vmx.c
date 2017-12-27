@@ -369,7 +369,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_PINBASED_CTLS,
 				&_pin_based_exec_control) < 0)
 		return -EIO;
-	
+
 	min =
 #ifdef CONFIG_X86_64
 	      CPU_BASED_CR8_LOAD_EXITING |
@@ -426,7 +426,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 
 	min = 0;
 #ifdef CONFIG_X86_64
-	min |= VM_EXIT_HOST_ADDR_SPACE_SIZE; //| VM_EXIT_ACK_INTR_ON_EXIT;
+	min |= VM_EXIT_HOST_ADDR_SPACE_SIZE | VM_EXIT_ACK_INTR_ON_EXIT;
 #endif
 //	opt = VM_EXIT_SAVE_IA32_PAT | VM_EXIT_LOAD_IA32_PAT;
 	opt = 0;
