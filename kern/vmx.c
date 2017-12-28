@@ -76,10 +76,9 @@ static DEFINE_SPINLOCK(vmx_vpid_lock);
 #define POSTED_INTERRUPT_NOTIFICATION_VECTOR 0xf2
 
 typedef struct posted_interrupt_desc {
-    uint64_t vectors[4]; /* posted interrupt vectors */
-    uint8_t on : 1; /* outstanding notification indicator */
-    uint64_t extra[4] : 255; /* extra space the VMM can use */
-} posted_interrupt_desc;
+    u32 vectors[8]; /* posted interrupt vectors */
+    u32 extra[8]; /* outstanding notification indicator and extra space the VMM can use */
+} __aligned(64) posted_interrupt_desc;
 
 static unsigned long *msr_bitmap;
 static void *virtual_apic_pages[NR_CPUS];
@@ -1002,14 +1001,14 @@ static void send_posted_ipi(uint32_t apic_id, uint8_t vector) {
     posted_interrupt_desc *desc = posted_interrupt_descriptors[apic_id];
     
     //first set the posted-interrupt request
-    if (test_and_set_bit(vector, desc->vectors)) {
+    if (test_and_set_bit(vector, (unsigned long *)desc->vectors)) {
         //bit already set, so the interrupt is already pending (and
         //the outstanding bit is 1)
         return;
     }
     
     //set the outstanding notification bit to 1
-    if (test_and_set_bit(0, desc->on)) {
+    if (test_and_set_bit(0, (unsigned long *)desc->extra)) {
         //bit already set, so there is an interrupt(s) already pending
         return;
     }
@@ -1017,7 +1016,7 @@ static void send_posted_ipi(uint32_t apic_id, uint8_t vector) {
     //now send the posted interrupt vector to the destination
     //TODO: IRQ save in KVM? _flat_send_IPI_mask() in kernel/apic/apic_flat_64.c
     //TODO: Need to check that the VMCS is active on the destination CPU?
-    apic_send_ipi(POSTED_INTERRUPT_NOTIFICATION_VECTOR, apid_id);
+    apic_send_ipi(POSTED_INTERRUPT_NOTIFICATION_VECTOR, apic_id);
 }
 
 /*
