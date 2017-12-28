@@ -3,10 +3,9 @@
 
 #define _GNU_SOURCE
 
-#include <malloc.h>
+#include <linux/mm.h>
 
 #include "dune.h"
-#include "cpu-x86.h"
 
 /* apic_send_ipi
  * Sends a posted IPI to an x2APIC.
@@ -30,8 +29,8 @@ void apic_send_ipi(uint8_t vector, uint32_t destination_apic_id) {
 	to_write |= ((uint64_t) destination_apic_id) << 32;
 
 	//[to_write] is initialized to 0, so the remaining bits are all 0
-	printf("ICR value %lx\n", to_write);
+	//printf("ICR value %lx\n", to_write);
 	//now write [to_write] to the MSR for the ICR
 	wrmsrl(0x830, to_write);
-	printf("DONE\n");
+	//printf("DONE\n");
 }

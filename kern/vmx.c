@@ -370,7 +370,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	u32 _vmentry_control = 0;
 
 	//TODO: Move [PIN_BASED_POST_INTR] to optional variable [opt]
-	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING | PIN_BASED_POSTED_INTR;
+	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING; //| PIN_BASED_POSTED_INTR;
 	opt = PIN_BASED_VIRTUAL_NMIS;
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_PINBASED_CTLS,
 				&_pin_based_exec_control) < 0)
@@ -401,9 +401,9 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	if (_cpu_based_exec_control & CPU_BASED_ACTIVATE_SECONDARY_CONTROLS) {
 		//TODO: Move [SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE] and [SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY]
 		//to optional [opt]
-		min2 =  SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE |
-			SECONDARY_EXEC_APIC_REGISTER_VIRT |
-			SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY;
+		min2 =  SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE; // |
+			//SECONDARY_EXEC_APIC_REGISTER_VIRT; // |
+			//SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY;
 		
 		opt2 =  SECONDARY_EXEC_WBINVD_EXITING |
 			SECONDARY_EXEC_ENABLE_VPID |
@@ -432,7 +432,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 
 	min = 0;
 #ifdef CONFIG_X86_64
-	min |= VM_EXIT_HOST_ADDR_SPACE_SIZE | VM_EXIT_ACK_INTR_ON_EXIT;
+	min |= VM_EXIT_HOST_ADDR_SPACE_SIZE; //| VM_EXIT_ACK_INTR_ON_EXIT;
 #endif
 //	opt = VM_EXIT_SAVE_IA32_PAT | VM_EXIT_LOAD_IA32_PAT;
 	opt = 0;
@@ -981,6 +981,8 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
 
 	//add the virtual apic page physical address to the VMCS
 	vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, __pa(vapic_page));
+
+	return;
 
 	//now handle posted interrupts
 	vmcs_write16(POSTED_INTR_NV, POSTED_INTERRUPT_NOTIFICATION_VECTOR);
@@ -1695,6 +1697,20 @@ static int vmx_handle_nmi_exception(struct vmx_vcpu *vcpu)
 	return -EIO;
 }
 
+static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
+{
+	u64 msr_addr = vcpu->regs[VCPU_REGS_RCX];
+	switch (msr_addr) {
+		case MSR_X2APIC_ICR:
+			//TODO: Emulate instruction
+			break;
+		default:
+			return -1;
+	}
+	vmx_step_instruction();
+	return 0;
+}
+
 /**
  * vmx_launch - the main loop for a VMX Dune process
  * @conf: the launch configuration
@@ -1772,6 +1788,8 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 				done = 1;
 		} else if (ret == EXIT_REASON_MSR_WRITE) {
 			printk(KERN_INFO "Need to handle MSR write\n");
+			if (vmx_handle_msr_write(vcpu))
+				done = 1;
 		} else if (ret != EXIT_REASON_EXTERNAL_INTERRUPT) {
 			printk(KERN_INFO "unhandled exit: reason %d, exit qualification %x\n",
 			       ret, vmcs_read32(EXIT_QUALIFICATION));
