@@ -57,6 +57,7 @@
 #include <asm/unistd_64.h>
 #include <asm/virtext.h>
 #include <asm/traps.h>
+#include <asm/bitops.h>
 
 #include "dune.h"
 #include "vmx.h"
@@ -74,9 +75,15 @@ static DEFINE_SPINLOCK(vmx_vpid_lock);
 #define MSR_X2APIC_EOI 0x80B
 #define POSTED_INTERRUPT_NOTIFICATION_VECTOR 0xf2
 
+typedef struct posted_interrupt_desc {
+    uint64_t vectors[4]; /* posted interrupt vectors */
+    uint8_t on : 1; /* outstanding notification indicator */
+    uint64_t extra[4] : 255; /* extra space the VMM can use */
+} posted_interrupt_desc;
+
 static unsigned long *msr_bitmap;
 static void *virtual_apic_pages[NR_CPUS];
-static void *posted_interrupt_descriptors[NR_CPUS];
+static posted_interrupt_desc *posted_interrupt_descriptors[NR_CPUS];
 
 #define NUM_SYSCALLS 312
 
@@ -985,6 +992,23 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
 }
 
 /*
+ * send_posted_ipi - sends a posted IPI for [vector] to the indicated apic
+ */
+static void send_posted_ipi(uint32_t apic_id, uint8_t vector) {
+    posted_interrupt_desc *desc = posted_interrupt_descriptors[apic_id];
+    
+    //first set the posted-interrupt request
+    test_and_set_bit(vector, desc->vectors);
+    
+    //set the outstanding notification bit to 1
+    test_and_set_bit(0, desc->on);
+    
+    //now send the posted interrupt vector to the destination
+    //TODO: IRQ save in KVM? _flat_send_IPI_mask() in kernel/apic/apic_flat_64.c
+    apic_send_ipi(POSTED_INTERRUPT_NOTIFICATION_VECTOR, apid_id);
+}
+
+/*
  *  vmx_setup_vmcs - configures the vmcs with starting parameters
  */
 static void vmx_setup_vmcs(struct vmx_vcpu *vcpu)
@@ -1890,7 +1914,7 @@ __init int vmx_init(void)
 
 	//allow access to the virtual x2APIC MSRs
 	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_X2APIC_ID);
-	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_X2APIC_ICR);
+	//__vmx_disable_intercept_for_msr(msr_bitmap, MSR_X2APIC_ICR);
 	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_X2APIC_EOI);
 
 	for_each_possible_cpu(cpu) {
@@ -1900,7 +1924,7 @@ __init int vmx_init(void)
 		}
 		//each descriptor only needs to be 64 bytes... does giving a page really matter?
 		//if the size is changed, be sure to update setup_vapic()
-		posted_interrupt_descriptors[cpu] = (void *)__get_free_page(GFP_KERNEL);
+		posted_interrupt_descriptors[cpu] = (posted_interrupt_desc *)__get_free_page(GFP_KERNEL);
 		if (!posted_interrupt_descriptors[cpu]) {
 			return -ENOMEM;
 		}
