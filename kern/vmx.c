@@ -993,18 +993,30 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
 
 /*
  * send_posted_ipi - sends a posted IPI for [vector] to the indicated apic
+ *
+ * According to the Intel manual, you must use locked read-modify-write
+ * instructions to modify a posted interrupt descriptor. It is safe to
+ * modify this descriptor even when the VMCS it belongs to is active.
  */
 static void send_posted_ipi(uint32_t apic_id, uint8_t vector) {
     posted_interrupt_desc *desc = posted_interrupt_descriptors[apic_id];
     
     //first set the posted-interrupt request
-    test_and_set_bit(vector, desc->vectors);
+    if (test_and_set_bit(vector, desc->vectors)) {
+        //bit already set, so the interrupt is already pending (and
+        //the outstanding bit is 1)
+        return;
+    }
     
     //set the outstanding notification bit to 1
-    test_and_set_bit(0, desc->on);
+    if (test_and_set_bit(0, desc->on)) {
+        //bit already set, so there is an interrupt(s) already pending
+        return;
+    }
     
     //now send the posted interrupt vector to the destination
     //TODO: IRQ save in KVM? _flat_send_IPI_mask() in kernel/apic/apic_flat_64.c
+    //TODO: Need to check that the VMCS is active on the destination CPU?
     apic_send_ipi(POSTED_INTERRUPT_NOTIFICATION_VECTOR, apid_id);
 }
 
