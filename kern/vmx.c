@@ -1697,12 +1697,20 @@ static int vmx_handle_nmi_exception(struct vmx_vcpu *vcpu)
 	return -EIO;
 }
 
+void vmx_emulate_icr_write(u64 icr) {
+        u32 destination = (u32)(icr >> 32);
+        u8 vector = icr & 0xFF;
+	send_posted_ipi(destination, vector);
+}
+
 static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
 {
-	u64 msr_addr = vcpu->regs[VCPU_REGS_RCX];
+	u32 msr_addr = vcpu->regs[VCPU_REGS_RCX];
+	u64 msr_data = (vcpu->regs[VCPU_REGS_RAX] & -1u)
+                       | ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32);
 	switch (msr_addr) {
 		case MSR_X2APIC_ICR:
-			//TODO: Emulate instruction
+			vmx_emulate_icr_write(msr_data);
 			break;
 		default:
 			return -1;
