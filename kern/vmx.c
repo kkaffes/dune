@@ -1705,9 +1705,12 @@ void vmx_emulate_icr_write(u64 icr) {
 
 static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
 {
+        //TODO: What is vmx_get_cpu() for?
+        vmx_get_cpu(vcpu);
 	u32 msr_addr = vcpu->regs[VCPU_REGS_RCX];
 	u64 msr_data = (vcpu->regs[VCPU_REGS_RAX] & -1u)
                        | ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32);
+        vmx_put_cpu(vcpu);
 	switch (msr_addr) {
 		case MSR_X2APIC_ICR:
 			vmx_emulate_icr_write(msr_data);
@@ -1715,7 +1718,9 @@ static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
 		default:
 			return -1;
 	}
+        vmx_get_cpu(vcpu);
 	vmx_step_instruction();
+        vmx_put_cpu(vcpu);
 	return 0;
 }
 
