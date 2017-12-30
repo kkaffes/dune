@@ -1697,7 +1697,7 @@ static int vmx_handle_nmi_exception(struct vmx_vcpu *vcpu)
 	return -EIO;
 }
 
-void vmx_emulate_icr_write(u64 icr) {
+static void vmx_emulate_icr_write(u64 icr) {
         u32 destination = (u32)(icr >> 32);
         u8 vector = icr & 0xFF;
 	send_posted_ipi(destination, vector);
@@ -1719,6 +1719,21 @@ static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
 			return -1;
 	}
 	return 0;
+}
+
+/*
+ * vmx_handle_external_interrupt - when posted interrupt processing is enabled,
+ * the "Acknowledge interrupt on exit" VM-exit control must be enabled as well.
+ * Thus, when an external interrupt is received, it is automatically acknowledged
+ * and the vector information is stored in the VMCS, but it is never actually 
+ * handled by the Linux kernel.
+ *
+ * This function calls the appropriate handling function in the kernel as though
+ * the interrupt were never intercepted.
+ */
+static int vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
+{
+
 }
 
 /**
@@ -1801,7 +1816,10 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 			printk(KERN_INFO "Need to handle MSR write\n");
 			if (vmx_handle_msr_write(vcpu))
 				done = 1;
-		} else if (ret != EXIT_REASON_EXTERNAL_INTERRUPT) {
+                } else if (ret == EXIT_REASON_EXTERNAL_INTERRUPT) {
+                        if (vmx_handle_external_interrupt(vcpu))
+                            done = 1;
+		} else {
 			printk(KERN_INFO "unhandled exit: reason %d, exit qualification %x\n",
 			       ret, vmcs_read32(EXIT_QUALIFICATION));
 			vcpu->ret_code = DUNE_RET_UNHANDLED_VMEXIT;
