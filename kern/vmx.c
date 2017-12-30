@@ -1718,9 +1718,6 @@ static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
 		default:
 			return -1;
 	}
-        vmx_get_cpu(vcpu);
-	vmx_step_instruction();
-        vmx_put_cpu(vcpu);
 	return 0;
 }
 
@@ -1784,7 +1781,8 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 		local_irq_enable();
 
 		if (ret == EXIT_REASON_VMCALL ||
-		    ret == EXIT_REASON_CPUID) {
+		    ret == EXIT_REASON_CPUID ||
+                    ret == EXIT_REASON_MSR_WRITE) {
 			vmx_step_instruction();
 		}
 
