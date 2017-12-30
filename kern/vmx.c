@@ -1731,7 +1731,7 @@ static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
  * This function calls the appropriate handling function in the kernel as though
  * the interrupt were never intercepted.
  */
-static int vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
+static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
 {
         u32 exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
 
@@ -1771,7 +1771,7 @@ static int vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
                         [entry]"r"(entry),
                         [ss]"i"(__KERNEL_DS),
                         [cs]"i"(__KERNEL_CS)
-                        );    
+                        );
             }
 }
 
@@ -1856,8 +1856,7 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 			if (vmx_handle_msr_write(vcpu))
 				done = 1;
                 } else if (ret == EXIT_REASON_EXTERNAL_INTERRUPT) {
-                        if (vmx_handle_external_interrupt(vcpu))
-                            done = 1;
+                        vmx_handle_external_interrupt(vcpu);
 		} else {
 			printk(KERN_INFO "unhandled exit: reason %d, exit qualification %x\n",
 			       ret, vmcs_read32(EXIT_QUALIFICATION));
