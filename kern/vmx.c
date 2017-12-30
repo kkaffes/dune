@@ -1733,7 +1733,46 @@ static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
  */
 static int vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
 {
+        u32 exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
 
+        if ((exit_intr_info & (INTR_INFO_VALID_MASK | INTR_INFO_INTR_TYPE_MASK))
+                        == (INTR_INFO_VALID_MASK | INTR_TYPE_EXT_INTR)) {
+                unsigned int vector;
+                unsigned long entry;
+                unsigned long host_idt_base;
+                gate_desc *desc;
+#ifdef CONFIG_X86_64
+                unsigned long tmp;
+#endif
+
+                vector =  exit_intr_info & INTR_INFO_VECTOR_MASK;
+                vmx_get_cpu(vcpu);
+                //TODO: What should the size of the vmcs read be?
+                host_idt_base = vmcs_read64(HOST_IDTR_BASE);
+                vmx_put_cpu(vcpu);
+                desc = (gate_desc *)host_idt_base + vector;
+                entry = gate_offset(desc);
+                asm volatile(
+#ifdef CONFIG_X86_64
+                        "mov %%" _ASM_SP ", %[sp]\n\t"
+                        "and $0xfffffffffffffff0, %%" _ASM_SP "\n\t"
+                        "push $%c[ss]\n\t"
+                        "push %[sp]\n\t"
+#endif
+                        "pushf\n\t"
+                        __ASM_SIZE(push) " $%c[cs]\n\t"
+                        "call *%[entry]\n\t"
+                        :     
+#ifdef CONFIG_X86_64
+                        [sp]"=&r"(tmp),
+#endif
+                        ASM_CALL_CONSTRAINT
+                        :     
+                        [entry]"r"(entry),
+                        [ss]"i"(__KERNEL_DS),
+                        [cs]"i"(__KERNEL_CS)
+                        );    
+            }
 }
 
 /**
