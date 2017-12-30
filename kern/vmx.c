@@ -1705,10 +1705,12 @@ static void vmx_emulate_icr_write(u64 icr) {
 
 static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
 {
+	u32 msr_addr;
+	u64 msr_data;
         //TODO: What is vmx_get_cpu() for?
         vmx_get_cpu(vcpu);
-	u32 msr_addr = vcpu->regs[VCPU_REGS_RCX];
-	u64 msr_data = (vcpu->regs[VCPU_REGS_RAX] & -1u)
+	msr_addr = vcpu->regs[VCPU_REGS_RCX];
+	msr_data = (vcpu->regs[VCPU_REGS_RAX] & -1u)
                        | ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32);
         vmx_put_cpu(vcpu);
 	switch (msr_addr) {
@@ -1744,14 +1746,14 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
 #ifdef CONFIG_X86_64
                 unsigned long tmp;
 #endif
-
+		register unsigned long current_stack_pointer asm(_ASM_SP);
                 vector =  exit_intr_info & INTR_INFO_VECTOR_MASK;
                 vmx_get_cpu(vcpu);
                 //TODO: What should the size of the vmcs read be?
                 host_idt_base = vmcs_read64(HOST_IDTR_BASE);
                 vmx_put_cpu(vcpu);
                 desc = (gate_desc *)host_idt_base + vector;
-                entry = gate_offset(desc);
+                entry = gate_offset(*desc);
                 asm volatile(
 #ifdef CONFIG_X86_64
                         "mov %%" _ASM_SP ", %[sp]\n\t"
@@ -1766,7 +1768,8 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
 #ifdef CONFIG_X86_64
                         [sp]"=&r"(tmp),
 #endif
-                        ASM_CALL_CONSTRAINT
+			"+r" (current_stack_pointer)
+                        //TODO: Why isn't this constant working rather than having to use the line above? //ASM_CALL_CONSTRAINT
                         :     
                         [entry]"r"(entry),
                         [ss]"i"(__KERNEL_DS),
