@@ -1737,10 +1737,10 @@ static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
 static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
 {
 
-	printk(KERN_INFO "In external interrupt function\n");
-
 	u32 exit_intr_info;
 	unsigned long host_idt_base;
+
+	printk(KERN_INFO "In external interrupt function\n");
 
 	vmx_get_cpu(vcpu);
         exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
@@ -1803,6 +1803,7 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 {
 	int ret, done = 0;
 	u32 exit_intr_info;
+	unsigned long host_idt_base;
 	struct vmx_vcpu *vcpu = vmx_create_vcpu(conf);
 	if (!vcpu)
 		return -ENOMEM;
@@ -1862,6 +1863,8 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 
 		vmx_put_cpu(vcpu);
 
+		printk("VM exit (exit reason %d) (interrupt info %x)\n", ret, exit_intr_info);
+
 		if (ret == EXIT_REASON_VMCALL)
 			vmx_handle_syscall(vcpu);
 		else if (ret == EXIT_REASON_CPUID)
@@ -1877,10 +1880,10 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 				done = 1;
                 } else if (ret == EXIT_REASON_EXTERNAL_INTERRUPT) {
                         printk(KERN_INFO "Handle external interrupt (in launch if statement)\n");
-	                //vmx_get_cpu(vcpu);
-                        //exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
-                        //host_idt_base = vmcs_read64(HOST_IDTR_BASE);
-	                //vmx_put_cpu(vcpu);
+	                vmx_get_cpu(vcpu);
+                        exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
+                        host_idt_base = vmcs_read64(HOST_IDTR_BASE);
+	                vmx_put_cpu(vcpu);
                         printk(KERN_INFO "Handle external interrupt (end of launch if statement)\n");
                         //vmx_handle_external_interrupt(vcpu);
 		} else {
