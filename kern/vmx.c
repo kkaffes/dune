@@ -63,6 +63,7 @@
 #include "vmx.h"
 #include "compat.h"
 #include "apic.h"
+#include "frame.h"
 
 static atomic_t vmx_enable_failed;
 
@@ -432,7 +433,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 
 	min = 0;
 #ifdef CONFIG_X86_64
-	min |= VM_EXIT_HOST_ADDR_SPACE_SIZE; //| VM_EXIT_ACK_INTR_ON_EXIT;
+	min |= VM_EXIT_HOST_ADDR_SPACE_SIZE | VM_EXIT_ACK_INTR_ON_EXIT;
 #endif
 //	opt = VM_EXIT_SAVE_IA32_PAT | VM_EXIT_LOAD_IA32_PAT;
 	opt = 0;
@@ -1777,6 +1778,7 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
                         );
             }
 }
+STACK_FRAME_NON_STANDARD(vmx_handle_external_intr);
 
 /**
  * vmx_launch - the main loop for a VMX Dune process
