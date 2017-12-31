@@ -1736,10 +1736,24 @@ static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
  */
 static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
 {
-        u32 exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
+
+	printk(KERN_INFO "In external interrupt function\n");
+
+	u32 exit_intr_info;
+	unsigned long host_idt_base;
+
+	vmx_get_cpu(vcpu);
+        exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
+        host_idt_base = vmcs_read64(HOST_IDTR_BASE);
+	vmx_put_cpu(vcpu);
 
         if ((exit_intr_info & (INTR_INFO_VALID_MASK | INTR_INFO_INTR_TYPE_MASK))
                         == (INTR_INFO_VALID_MASK | INTR_TYPE_EXT_INTR)) {
+
+
+		printk(KERN_INFO "In external interrupt function (in if statement\n");
+		return;
+
                 unsigned int vector;
                 unsigned long entry;
                 unsigned long host_idt_base;
@@ -1749,10 +1763,10 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
 #endif
 		register unsigned long current_stack_pointer asm(_ASM_SP);
                 vector =  exit_intr_info & INTR_INFO_VECTOR_MASK;
-                vmx_get_cpu(vcpu);
+       /*         vmx_get_cpu(vcpu);
                 //TODO: What should the size of the vmcs read be?
                 host_idt_base = vmcs_read64(HOST_IDTR_BASE);
-                vmx_put_cpu(vcpu);
+                vmx_put_cpu(vcpu); */
                 desc = (gate_desc *)host_idt_base + vector;
                 entry = gate_offset(*desc);
                 asm volatile(
@@ -1777,6 +1791,7 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
                         [cs]"i"(__KERNEL_CS)
                         );
             }
+	printk(KERN_INFO "In external interrupt function (NOT in if statement)\n");
 }
 STACK_FRAME_NON_STANDARD(vmx_handle_external_intr);
 
