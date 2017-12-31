@@ -1793,7 +1793,7 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
             }
 	printk(KERN_INFO "In external interrupt function (NOT in if statement)\n");
 }
-STACK_FRAME_NON_STANDARD(vmx_handle_external_intr);
+STACK_FRAME_NON_STANDARD(vmx_handle_external_interrupt);
 
 /**
  * vmx_launch - the main loop for a VMX Dune process
@@ -1876,7 +1876,13 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 			if (vmx_handle_msr_write(vcpu))
 				done = 1;
                 } else if (ret == EXIT_REASON_EXTERNAL_INTERRUPT) {
-                        vmx_handle_external_interrupt(vcpu);
+                        printk(KERN_INFO "Handle external interrupt (in launch if statement)\n");
+	                //vmx_get_cpu(vcpu);
+                        //exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
+                        //host_idt_base = vmcs_read64(HOST_IDTR_BASE);
+	                //vmx_put_cpu(vcpu);
+                        printk(KERN_INFO "Handle external interrupt (end of launch if statement)\n");
+                        //vmx_handle_external_interrupt(vcpu);
 		} else {
 			printk(KERN_INFO "unhandled exit: reason %d, exit qualification %x\n",
 			       ret, vmcs_read32(EXIT_QUALIFICATION));
