@@ -24,13 +24,15 @@ static void test_handler(struct dune_tf *tf)
 }
 
 void *t2_start(void *arg) {
-	//TODO: Set IF to 1
 	volatile int ret = dune_enter();
 	if (ret) {
 		printf("posted_ipi: failed to enter dune in thread 2\n");
 		return NULL;
 	}
         
+	//TODO: Can I remove this?
+	asm("sti");
+
         printf("APID ID (thread 2): %u\n", dune_apic_id());	
 	
 	dune_register_intr_handler(TEST_VECTOR, test_handler);
