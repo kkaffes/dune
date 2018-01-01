@@ -540,9 +540,7 @@ static void vmx_setup_constant_host_state(struct vmx_vcpu *vcpu)
 	vmcs_write16(HOST_SS_SELECTOR, __KERNEL_DS);  /* 22.2.4 */
 	vmcs_write16(HOST_TR_SELECTOR, GDT_ENTRY_TSS*8);  /* 22.2.4 */
 
-	//native_store_idt(&dt);
 	vmcs_writel(HOST_IDTR_BASE, (unsigned long)vcpu->idt_base);   /* 22.2.4 */
-	printk(KERN_INFO "Set up interrupt descriptor table in VMCS %p\n", vcpu->idt_base);
 
 	asm("mov $.Lkvm_vmx_return, %0" : "=r"(tmpl));
 	vmcs_writel(HOST_RIP, tmpl); /* 22.2.5 */
@@ -1221,7 +1219,6 @@ static struct vmx_vcpu * vmx_create_vcpu(struct dune_config *conf)
 
 	native_store_idt(&dt);
 	vcpu->idt_base = (void *)dt.address;
-	printk(KERN_INFO "Set up interrupt descriptor table %p\n", vcpu->idt_base);
 
 	spin_lock_init(&vcpu->ept_lock);
 	if (vmx_init_ept(vcpu))
