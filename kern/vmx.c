@@ -524,11 +524,11 @@ static void vmx_free_vmcs(struct vmcs *vmcs)
  * Note that host-state that does change is set elsewhere. E.g., host-state
  * that is set differently for each CPU is set in vmx_vcpu_load(), not here.
  */
-static void vmx_setup_constant_host_state(void)
+static void vmx_setup_constant_host_state(struct vmx_vcpu *vcpu)
 {
 	u32 low32, high32;
 	unsigned long tmpl;
-	struct desc_ptr dt;
+	//struct desc_ptr dt;
 
 	vmcs_writel(HOST_CR0, read_cr0() & ~X86_CR0_TS);  /* 22.2.3 */
 	vmcs_writel(HOST_CR4, __read_cr4());  /* 22.2.3, 22.2.5 */
@@ -540,8 +540,9 @@ static void vmx_setup_constant_host_state(void)
 	vmcs_write16(HOST_SS_SELECTOR, __KERNEL_DS);  /* 22.2.4 */
 	vmcs_write16(HOST_TR_SELECTOR, GDT_ENTRY_TSS*8);  /* 22.2.4 */
 
-	native_store_idt(&dt);
-	vmcs_writel(HOST_IDTR_BASE, dt.address);   /* 22.2.4 */
+	//native_store_idt(&dt);
+	vmcs_writel(HOST_IDTR_BASE, (unsigned long)vcpu->idt_base);   /* 22.2.4 */
+	printk(KERN_INFO "Set up interrupt descriptor table in VMCS %p\n", vcpu->idt_base);
 
 	asm("mov $.Lkvm_vmx_return, %0" : "=r"(tmpl));
 	vmcs_writel(HOST_RIP, tmpl); /* 22.2.5 */
@@ -1091,7 +1092,7 @@ static void vmx_setup_vmcs(struct vmx_vcpu *vcpu)
 
 	vmcs_write32(EXCEPTION_BITMAP, 1 << X86_TRAP_DB | 1 << X86_TRAP_BP);
 
-	vmx_setup_constant_host_state();
+	vmx_setup_constant_host_state(vcpu);
 }
 
 /**
@@ -1186,6 +1187,7 @@ static void vmx_copy_registers_to_conf(struct vmx_vcpu *vcpu, struct dune_config
 static struct vmx_vcpu * vmx_create_vcpu(struct dune_config *conf)
 {
 	struct vmx_vcpu *vcpu;
+	struct desc_ptr dt;
 
 	if (conf->vcpu) {
 		/* This Dune configuration already has a VCPU. */
@@ -1216,6 +1218,10 @@ static struct vmx_vcpu * vmx_create_vcpu(struct dune_config *conf)
 
 	vcpu->cpu = -1;
 	vcpu->syscall_tbl = (void *) &dune_syscall_tbl;
+
+	native_store_idt(&dt);
+	vcpu->idt_base = (void *)dt.address;
+	printk(KERN_INFO "Set up interrupt descriptor table %p\n", vcpu->idt_base);
 
 	spin_lock_init(&vcpu->ept_lock);
 	if (vmx_init_ept(vcpu))
@@ -1738,36 +1744,24 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
 {
 
 	u32 exit_intr_info;
-	unsigned long host_idt_base;
-
-	printk(KERN_INFO "In external interrupt function\n");
 
 	vmx_get_cpu(vcpu);
         exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
-        host_idt_base = vmcs_read64(HOST_IDTR_BASE);
 	vmx_put_cpu(vcpu);
 
         if ((exit_intr_info & (INTR_INFO_VALID_MASK | INTR_INFO_INTR_TYPE_MASK))
                         == (INTR_INFO_VALID_MASK | INTR_TYPE_EXT_INTR)) {
 
 
-		printk(KERN_INFO "In external interrupt function (in if statement\n");
-		return;
-
                 unsigned int vector;
                 unsigned long entry;
-                unsigned long host_idt_base;
                 gate_desc *desc;
 #ifdef CONFIG_X86_64
                 unsigned long tmp;
 #endif
 		register unsigned long current_stack_pointer asm(_ASM_SP);
                 vector =  exit_intr_info & INTR_INFO_VECTOR_MASK;
-       /*         vmx_get_cpu(vcpu);
-                //TODO: What should the size of the vmcs read be?
-                host_idt_base = vmcs_read64(HOST_IDTR_BASE);
-                vmx_put_cpu(vcpu); */
-                desc = (gate_desc *)host_idt_base + vector;
+                desc = (gate_desc *)vcpu->idt_base + vector;
                 entry = gate_offset(*desc);
                 asm volatile(
 #ifdef CONFIG_X86_64
@@ -1791,7 +1785,6 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
                         [cs]"i"(__KERNEL_CS)
                         );
             }
-	printk(KERN_INFO "In external interrupt function (NOT in if statement)\n");
 }
 STACK_FRAME_NON_STANDARD(vmx_handle_external_interrupt);
 
@@ -1803,7 +1796,6 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 {
 	int ret, done = 0;
 	u32 exit_intr_info;
-	unsigned long host_idt_base;
 	struct vmx_vcpu *vcpu = vmx_create_vcpu(conf);
 	if (!vcpu)
 		return -ENOMEM;
@@ -1853,6 +1845,8 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 			asm("int $2");
 		}
 
+                vmx_handle_external_interrupt(vcpu);
+	
 		local_irq_enable();
 
 		if (ret == EXIT_REASON_VMCALL ||
@@ -1862,8 +1856,6 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 		}
 
 		vmx_put_cpu(vcpu);
-
-		printk("VM exit (exit reason %d) (interrupt info %x)\n", ret, exit_intr_info);
 
 		if (ret == EXIT_REASON_VMCALL)
 			vmx_handle_syscall(vcpu);
@@ -1878,15 +1870,7 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 			printk(KERN_INFO "Need to handle MSR write\n");
 			if (vmx_handle_msr_write(vcpu))
 				done = 1;
-                } else if (ret == EXIT_REASON_EXTERNAL_INTERRUPT) {
-                        printk(KERN_INFO "Handle external interrupt (in launch if statement)\n");
-	                vmx_get_cpu(vcpu);
-                        exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
-                        host_idt_base = vmcs_read64(HOST_IDTR_BASE);
-	                vmx_put_cpu(vcpu);
-                        printk(KERN_INFO "Handle external interrupt (end of launch if statement)\n");
-                        //vmx_handle_external_interrupt(vcpu);
-		} else {
+		} else if (ret != EXIT_REASON_EXTERNAL_INTERRUPT) {
 			printk(KERN_INFO "unhandled exit: reason %d, exit qualification %x\n",
 			       ret, vmcs_read32(EXIT_QUALIFICATION));
 			vcpu->ret_code = DUNE_RET_UNHANDLED_VMEXIT;
