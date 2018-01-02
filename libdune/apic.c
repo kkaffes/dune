@@ -33,8 +33,6 @@ void dune_apic_send_ipi(uint8_t vector, uint32_t destination_apic_id) {
 	uint64_t to_write = 0x0;
 	//write the vector number to the least significant 8 bits
 	to_write |= vector;
-	//set level to ASSERT
-	to_write |= 1 << 14;
 	//write the destination to the most significant 32 bits
 	to_write |= ((uint64_t) destination_apic_id) << 32;
 
