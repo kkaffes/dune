@@ -1770,7 +1770,9 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
 	
 		printk(KERN_INFO "Handle external interrupt on core %d (%x)\n", raw_smp_processor_id(), vector);
 		if (vector == POSTED_INTR_VECTOR) {
+			//TODO: Is this an error case when posted interrupts are enabled?
 			printk(KERN_INFO "Got posted intr\n");
+			apic_write_eoi();
 			return;
 		}
 

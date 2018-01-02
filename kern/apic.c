@@ -30,3 +30,7 @@ void apic_send_ipi(u8 vector, u32 destination_apic_id) {
 	wrmsrl(APIC_BASE_MSR + (APIC_ICR >> 4), ((__u64) destination_apic_id) << 32 | low);
 	printk(KERN_INFO "DONE\n");
 }
+
+void apic_write_eoi(void) {
+	wrmsrl(APIC_BASE_MSR + (APIC_EOI >> 4), APIC_EOI_ACK);
+}

@@ -4,3 +4,4 @@ static struct apic_map {
 } apic_map[NR_CPUS];
 
 void apic_send_ipi(uint8_t vector, uint32_t destination_apic_id);
+void apic_write_eoi(void);
