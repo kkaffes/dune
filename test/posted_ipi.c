@@ -54,7 +54,6 @@ int main(int argc, char *argv[])
 		printf("failed to initialize dune\n");
 		return ret;
 	}
-
 	printf("posted_ipi: now printing from dune mode\n");
 
 	pthread_t t2;
@@ -74,7 +73,7 @@ int main(int argc, char *argv[])
         printf("APID ID: %u\n", dune_apic_id());
 
 	//TODO: Send posted IPI
-	dune_apic_send_ipi(TEST_VECTOR, THREAD_2_LOCAL_APIC_ID);
+	dune_apic_send_ipi(TEST_VECTOR, apic_id_for_cpu(THREAD_2_CORE));
 
 	pthread_join(t2, NULL);
 
