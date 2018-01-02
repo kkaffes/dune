@@ -29,6 +29,6 @@ void apic_send_ipi(uint8_t vector, uint32_t destination_apic_id) {
 	//[to_write] is initialized to 0, so the remaining bits are all 0
 	printk(KERN_INFO "ICR value %lx\n", to_write);
 	//now write [to_write] to the MSR for the ICR
-	wrmsrl(0x830, to_write);
+	wrmsrl(APIC_BASE_MSR + (APIC_ICR >> 4), to_write);
 	printk(KERN_INFO "DONE\n");
 }

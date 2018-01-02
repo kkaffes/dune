@@ -74,7 +74,6 @@ static DEFINE_SPINLOCK(vmx_vpid_lock);
 #define MSR_X2APIC_ID 0x802
 #define MSR_X2APIC_ICR 0x830
 #define MSR_X2APIC_EOI 0x80B
-#define POSTED_INTERRUPT_NOTIFICATION_VECTOR 0xf2
 
 typedef struct posted_interrupt_desc {
     u32 vectors[8]; /* posted interrupt vectors */
@@ -985,7 +984,7 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
 	return;
 
 	//now handle posted interrupts
-	vmcs_write16(POSTED_INTR_NV, POSTED_INTERRUPT_NOTIFICATION_VECTOR);
+	vmcs_write16(POSTED_INTR_NV, POSTED_INTR_VECTOR);
 	posted_interrupt_descriptor = posted_interrupt_descriptors[vcpu->vpid];
 	memset(posted_interrupt_descriptor, 0x00, PAGE_SIZE);
 	printk(KERN_INFO "Posted interrupt descriptor %lx\n", __pa(posted_interrupt_descriptor));
@@ -1018,7 +1017,7 @@ static void send_posted_ipi(uint32_t apic_id, uint8_t vector) {
     //now send the posted interrupt vector to the destination
     //TODO: IRQ save in KVM? _flat_send_IPI_mask() in kernel/apic/apic_flat_64.c
     //TODO: Need to check that the VMCS is active on the destination CPU?
-    apic_send_ipi(POSTED_INTERRUPT_NOTIFICATION_VECTOR, apic_id);
+    apic_send_ipi(POSTED_INTR_VECTOR, apic_id);
 }
 
 /*
