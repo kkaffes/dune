@@ -8,7 +8,7 @@
 
 #include "dune.h"
 
-/* apic_send_ipi
+/* apic_send_ipi_x2
  * Sends a posted IPI to an x2APIC.
  *
  * [vector] is the IPI vector number.
@@ -20,7 +20,7 @@
  * implementation of this function. Note that this function only supports
  * x2APIC, not xAPIC.
  */
-void apic_send_ipi(u8 vector, u32 destination_apic_id) {
+static void apic_send_ipi_x2(u8 vector, u32 destination_apic_id) {
 	u32 low;
 	low = __prepare_ICR(0, vector, APIC_DEST_PHYSICAL);
 	printk(KERN_INFO "ICR value %x\n", low);
@@ -31,6 +31,23 @@ void apic_send_ipi(u8 vector, u32 destination_apic_id) {
 	printk(KERN_INFO "DONE\n");
 }
 
+static void apic_send_ipi_x(u8 vector, u8 destination_apic_id) {
+	__default_send_IPI_dest_field(destination_apic_id, vector, APIC_DEST_PHYSICAL);
+}
+
+void apic_send_ipi(u8 vector, u32 destination_apic_id) {
+	if (x2apic_enabled()) {
+		apic_send_ipi_x2(vector, destination_apic_id);
+	} else {
+		apic_send_ipi_x(vector, (u8)destination_apic_id);
+	}
+}
+
 void apic_write_eoi(void) {
-	wrmsrl(APIC_BASE_MSR + (APIC_EOI >> 4), APIC_EOI_ACK);
+	if (x2apic_enabled()) {
+		wrmsrl(APIC_BASE_MSR + (APIC_EOI >> 4), APIC_EOI_ACK);
+	} else {
+		native_apic_msr_eoi_write(0, 0);
+		//apic_write(APIC_EOI, APIC_EOI_ACK);
+	}
 }
