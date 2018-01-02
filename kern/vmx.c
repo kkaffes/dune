@@ -373,7 +373,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	u32 _vmentry_control = 0;
 
 	//TODO: Move [PIN_BASED_POST_INTR] to optional variable [opt]
-	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING; // | PIN_BASED_POSTED_INTR;
+	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING | PIN_BASED_POSTED_INTR;
 	opt = PIN_BASED_VIRTUAL_NMIS;
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_PINBASED_CTLS,
 				&_pin_based_exec_control) < 0)
@@ -404,9 +404,9 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	if (_cpu_based_exec_control & CPU_BASED_ACTIVATE_SECONDARY_CONTROLS) {
 		//TODO: Move [SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE] and [SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY]
 		//to optional [opt]
-		min2 =  SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE;// |
-			//SECONDARY_EXEC_APIC_REGISTER_VIRT; // |
-			//SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY;
+		min2 =  SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE |
+			SECONDARY_EXEC_APIC_REGISTER_VIRT |
+			SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY;
 		
 		opt2 =  SECONDARY_EXEC_WBINVD_EXITING |
 			SECONDARY_EXEC_ENABLE_VPID |
@@ -971,7 +971,7 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
 	void *vapic_page, *posted_interrupt_descriptor;
 	u32 local_apic_id;
 	
-	vapic_page = virtual_apic_pages[vcpu->vpid];
+	vapic_page = virtual_apic_pages[raw_smp_processor_id()];
 	memset(vapic_page, 0x00, PAGE_SIZE);
 	
 	//get the local APIC ID
@@ -984,11 +984,9 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
 	//add the virtual apic page physical address to the VMCS
 	vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, __pa(vapic_page));
 
-	return;
-
 	//now handle posted interrupts
 	vmcs_write16(POSTED_INTR_NV, POSTED_INTR_VECTOR);
-	posted_interrupt_descriptor = posted_interrupt_descriptors[vcpu->vpid];
+	posted_interrupt_descriptor = posted_interrupt_descriptors[raw_smp_processor_id()];
 	memset(posted_interrupt_descriptor, 0x00, PAGE_SIZE);
 	printk(KERN_INFO "Posted interrupt descriptor %lx\n", __pa(posted_interrupt_descriptor));
 	vmcs_write64(POSTED_INTR_DESC_ADDR, __pa(posted_interrupt_descriptor));
@@ -1005,7 +1003,7 @@ static void send_posted_ipi(uint32_t apic_id, uint8_t vector) {
     //TODO: Need to map apic id to cpu
     posted_interrupt_desc *desc = posted_interrupt_descriptors[10];
    
-	printk(KERN_INFO "Send posted IPI (apic_id %u, desc %p)\n", apic_id, desc);
+    printk(KERN_INFO "Send posted IPI (apic_id %u, desc %p)\n", apic_id, desc);
  
     //first set the posted-interrupt request
     if (test_and_set_bit(vector, (unsigned long *)desc->vectors)) {
@@ -1710,8 +1708,8 @@ static int vmx_handle_nmi_exception(struct vmx_vcpu *vcpu)
 static void vmx_emulate_icr_write(u64 icr) {
         u32 destination = (u32)(icr >> 32);
         u8 vector = icr & 0xFF;
-	//send_posted_ipi(destination, vector);
-	apic_send_ipi(POSTED_INTR_VECTOR, destination);
+	send_posted_ipi(destination, vector);
+	//apic_send_ipi(POSTED_INTR_VECTOR, destination);
 }
 
 static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
@@ -1815,6 +1813,10 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 
 	printk(KERN_ERR "vmx: created VCPU (VPID %d)\n",
 	       vcpu->vpid);
+
+	vmx_get_cpu(vcpu);
+	printk(KERN_INFO "Posted interrupt desc for VPID %d is %p\n", vcpu->vpid, (void *)vmcs_read64(POSTED_INTR_DESC_ADDR));
+	vmx_put_cpu(vcpu);
 
 	while (1) {
 		vmx_get_cpu(vcpu);

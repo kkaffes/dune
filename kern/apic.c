@@ -8,6 +8,16 @@
 
 #include "dune.h"
 
+#define XAPIC_EOI 0xB0
+#define APIC_EOI_ACK 0x0
+
+static inline void xapic_write(uint32_t reg, uint32_t v)
+{
+	volatile uint32_t *addr = (volatile uint32_t *)(APIC_BASE + reg);
+
+	asm volatile("movl %0, %P1" : "=r" (v), "=m" (*addr) : "i" (0), "0" (v), "m" (*addr));
+}
+
 /* apic_send_ipi_x2
  * Sends a posted IPI to an x2APIC.
  *
@@ -47,7 +57,6 @@ void apic_write_eoi(void) {
 	if (x2apic_enabled()) {
 		wrmsrl(APIC_BASE_MSR + (APIC_EOI >> 4), APIC_EOI_ACK);
 	} else {
-		native_apic_msr_eoi_write(0, 0);
-		//apic_write(APIC_EOI, APIC_EOI_ACK);
+		xapic_write(XAPIC_EOI, APIC_EOI_ACK);
 	}
 }
