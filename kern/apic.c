@@ -24,6 +24,9 @@ void apic_send_ipi(u8 vector, u32 destination_apic_id) {
 	u32 low;
 	low = __prepare_ICR(0, vector, APIC_DEST_PHYSICAL);
 	printk(KERN_INFO "ICR value %x\n", low);
-	native_x2apic_icr_write(low, destination_apic_id);
+	//native_x2apic_icr_write(low, destination_apic_id);
+
+	x2apic_wrmsr_fence();
+	wrmsrl(APIC_BASE_MSR + (APIC_ICR >> 4), ((__u64) destination_apic_id) << 32 | low);
 	printk(KERN_INFO "DONE\n");
 }

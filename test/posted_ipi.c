@@ -9,7 +9,7 @@
 #include "libdune/cpu-x86.h"
 
 #define THREAD_2_CORE 10
-#define THREAD_2_LOCAL_APIC_ID 24
+#define THREAD_2_LOCAL_APIC_ID 40
 #define TEST_VECTOR 0xf2
 
 volatile bool t2_ready = false;

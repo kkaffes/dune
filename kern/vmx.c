@@ -373,7 +373,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	u32 _vmentry_control = 0;
 
 	//TODO: Move [PIN_BASED_POST_INTR] to optional variable [opt]
-	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING | PIN_BASED_POSTED_INTR;
+	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING; // | PIN_BASED_POSTED_INTR;
 	opt = PIN_BASED_VIRTUAL_NMIS;
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_PINBASED_CTLS,
 				&_pin_based_exec_control) < 0)
@@ -404,9 +404,9 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	if (_cpu_based_exec_control & CPU_BASED_ACTIVATE_SECONDARY_CONTROLS) {
 		//TODO: Move [SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE] and [SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY]
 		//to optional [opt]
-		min2 =  SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE |
-			SECONDARY_EXEC_APIC_REGISTER_VIRT |
-			SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY;
+		min2 =  SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE;// |
+			//SECONDARY_EXEC_APIC_REGISTER_VIRT; // |
+			//SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY;
 		
 		opt2 =  SECONDARY_EXEC_WBINVD_EXITING |
 			SECONDARY_EXEC_ENABLE_VPID |
@@ -1003,7 +1003,6 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
  */
 static void send_posted_ipi(uint32_t apic_id, uint8_t vector) {
     //TODO: Need to map apic id to cpu
-    unsigned long flags;
     posted_interrupt_desc *desc = posted_interrupt_descriptors[10];
    
 	printk(KERN_INFO "Send posted IPI (apic_id %u, desc %p)\n", apic_id, desc);
@@ -1025,10 +1024,7 @@ static void send_posted_ipi(uint32_t apic_id, uint8_t vector) {
     //TODO: IRQ save in KVM? _flat_send_IPI_mask() in kernel/apic/apic_flat_64.c
     //TODO: Need to check that the VMCS is active on the destination CPU?
 
-    x2apic_wrmsr_fence();
-    local_irq_save(flags);
     apic_send_ipi(POSTED_INTR_VECTOR, apic_id);
-    local_irq_restore(flags);
 }
 
 /*
@@ -1714,7 +1710,8 @@ static int vmx_handle_nmi_exception(struct vmx_vcpu *vcpu)
 static void vmx_emulate_icr_write(u64 icr) {
         u32 destination = (u32)(icr >> 32);
         u8 vector = icr & 0xFF;
-	send_posted_ipi(destination, vector);
+	//send_posted_ipi(destination, vector);
+	apic_send_ipi(POSTED_INTR_VECTOR, destination);
 }
 
 static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
@@ -1771,7 +1768,7 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
                 desc = (gate_desc *)vcpu->idt_base + vector;
                 entry = gate_offset(*desc);
 	
-		printk(KERN_INFO "Handle external interrupt on core %d (%d)\n", raw_smp_processor_id(), vector);
+		printk(KERN_INFO "Handle external interrupt on core %d (%x)\n", raw_smp_processor_id(), vector);
 		if (vector == POSTED_INTR_VECTOR) {
 			printk(KERN_INFO "Got posted intr\n");
 			return;
