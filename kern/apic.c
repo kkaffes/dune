@@ -4,6 +4,7 @@
 #define _GNU_SOURCE
 
 #include <linux/mm.h>
+#include <asm/ipi.h>
 
 #include "dune.h"
 
@@ -19,16 +20,10 @@
  * implementation of this function. Note that this function only supports
  * x2APIC, not xAPIC.
  */
-void apic_send_ipi(uint8_t vector, uint32_t destination_apic_id) {
-	uint64_t to_write = 0x0;
-	//write the vector number to the least significant 8 bits
-	to_write |= vector;
-	//write the destination to the most significant 32 bits
-	to_write |= ((uint64_t) destination_apic_id) << 32;
-
-	//[to_write] is initialized to 0, so the remaining bits are all 0
-	printk(KERN_INFO "ICR value %lx\n", to_write);
-	//now write [to_write] to the MSR for the ICR
-	wrmsrl(APIC_BASE_MSR + (APIC_ICR >> 4), to_write);
+void apic_send_ipi(u8 vector, u32 destination_apic_id) {
+	u32 low;
+	low = __prepare_ICR(0, vector, APIC_DEST_PHYSICAL);
+	printk(KERN_INFO "ICR value %x\n", low);
+	native_x2apic_icr_write(low, destination_apic_id);
 	printk(KERN_INFO "DONE\n");
 }

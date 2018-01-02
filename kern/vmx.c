@@ -75,6 +75,9 @@ static DEFINE_SPINLOCK(vmx_vpid_lock);
 #define MSR_X2APIC_ICR 0x830
 #define MSR_X2APIC_EOI 0x80B
 
+bool core_10_out = true;
+bool sent_posted_ipi = false;
+
 typedef struct posted_interrupt_desc {
     u32 vectors[8]; /* posted interrupt vectors */
     u32 extra[8]; /* outstanding notification indicator and extra space the VMM can use */
@@ -999,8 +1002,12 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
  * modify this descriptor even when the VMCS it belongs to is active.
  */
 static void send_posted_ipi(uint32_t apic_id, uint8_t vector) {
-    posted_interrupt_desc *desc = posted_interrupt_descriptors[apic_id];
-    
+    //TODO: Need to map apic id to cpu
+    unsigned long flags;
+    posted_interrupt_desc *desc = posted_interrupt_descriptors[10];
+   
+	printk(KERN_INFO "Send posted IPI (apic_id %u, desc %p)\n", apic_id, desc);
+ 
     //first set the posted-interrupt request
     if (test_and_set_bit(vector, (unsigned long *)desc->vectors)) {
         //bit already set, so the interrupt is already pending (and
@@ -1017,7 +1024,11 @@ static void send_posted_ipi(uint32_t apic_id, uint8_t vector) {
     //now send the posted interrupt vector to the destination
     //TODO: IRQ save in KVM? _flat_send_IPI_mask() in kernel/apic/apic_flat_64.c
     //TODO: Need to check that the VMCS is active on the destination CPU?
+
+    x2apic_wrmsr_fence();
+    local_irq_save(flags);
     apic_send_ipi(POSTED_INTR_VECTOR, apic_id);
+    local_irq_restore(flags);
 }
 
 /*
@@ -1759,6 +1770,12 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
                 vector =  exit_intr_info & INTR_INFO_VECTOR_MASK;
                 desc = (gate_desc *)vcpu->idt_base + vector;
                 entry = gate_offset(*desc);
+	
+		printk(KERN_INFO "Handle external interrupt on core %d (%d)\n", raw_smp_processor_id(), vector);
+		if (vector == POSTED_INTR_VECTOR) {
+			printk(KERN_INFO "Got posted intr\n");
+		}
+
                 asm volatile(
 #ifdef CONFIG_X86_64
                         "mov %%" _ASM_SP ", %[sp]\n\t"
@@ -1832,7 +1849,17 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 
 		setup_perf_msrs(vcpu);
 
+		if (raw_smp_processor_id() == 10) {
+			core_10_out = false;
+		}
+		asm("mfence" ::: "memory");
+
 		ret = vmx_run_vcpu(vcpu);
+
+		if (raw_smp_processor_id() == 10) {
+			core_10_out = true;
+		}
+		asm("mfence" ::: "memory");
 
 		/* We need to handle NMIs before interrupts are enabled */
 		exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
@@ -2030,6 +2057,7 @@ __init int vmx_init(void)
 		//each descriptor only needs to be 64 bytes... does giving a page really matter?
 		//if the size is changed, be sure to update setup_vapic()
 		posted_interrupt_descriptors[cpu] = (posted_interrupt_desc *)__get_free_page(GFP_KERNEL);
+		printk(KERN_INFO "Set up posted interrupt descriptor for cpu %u\n", cpu);
 		if (!posted_interrupt_descriptors[cpu]) {
 			return -ENOMEM;
 		}
