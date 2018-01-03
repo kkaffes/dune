@@ -10,6 +10,14 @@
 #include "cpu-x86.h"
 
 //the value to write to the EOI register when an interrupt handler has finished
+#define APIC_ID_MSR 0x802
+#define APIC_ICR_MSR 0x830
+#define APIC_EOI_MSR 0x80B
+
+#define APIC_DM_FIXED 0x00000
+#define NMI_VECTOR 0x02
+#define APIC_DM_NMI 0x00400
+#define APIC_DEST_PHYSICAL 0x00000
 #define EOI_ACK 0x0
 
 //TODO: Get total number of CPUs in system
@@ -18,7 +26,7 @@ static int num_rt_entries = 100;
 
 uint32_t dune_apic_id() {
 	long long apic_id;
-	rdmsrl(0x802, apic_id);
+	rdmsrl(APIC_ID_MSR, apic_id);
 	return (uint32_t)apic_id;
 }
 
@@ -38,30 +46,25 @@ uint32_t apic_id_for_cpu(uint32_t cpu) {
 	return apic_routing[cpu];
 }
 
-/* apic_send_ipi
- * Sends a posted IPI to an x2APIC.
- *
- * [vector] is the IPI vector number.
- * [destination_apic_id] is the ID of the local APIC for the core that
- * should receive the IPI. You can look up the local APIC ID for each core
- * by printing /proc/cpuinfo to the console (e.g. cat /proc/cpuinfo).
- *
- * See Section 10.6.1 in the Intel manual for details about the
- * implementation of this function. Note that this function only supports
- * x2APIC, not xAPIC.
- */
-void dune_apic_send_ipi(uint8_t vector, uint32_t destination_apic_id) {
-	uint64_t to_write = 0x0;
-	//write the vector number to the least significant 8 bits
-	to_write |= vector;
-	//write the destination to the most significant 32 bits
-	to_write |= ((uint64_t) destination_apic_id) << 32;
+static inline unsigned int __prepare_ICR(unsigned int shortcut, int vector,
+                                         unsigned int dest)
+{
+        unsigned int icr = shortcut | dest;
 
-	//[to_write] is initialized to 0, so the remaining bits are all 0
-	printf("Destination %u, ICR value %lx\n", destination_apic_id, to_write);
-	//now write [to_write] to the MSR for the ICR
-	wrmsrl(0x830, to_write);
-	printf("DONE\n");
+        switch (vector) {
+        default:
+                icr |= APIC_DM_FIXED | vector;
+                break;
+        case NMI_VECTOR:
+                icr |= APIC_DM_NMI;
+                break;
+        }   
+        return icr;
+}
+
+void dune_apic_send_ipi(uint8_t vector, uint32_t destination_apic_id) {
+	uint32_t low = __prepare_ICR(0, vector, APIC_DEST_PHYSICAL);
+	wrmsrl(APIC_ICR_MSR, (((uint64_t)destination_apic_id) << 32) | low);
 }
 
 /* apic_eoi
@@ -70,6 +73,5 @@ void dune_apic_send_ipi(uint8_t vector, uint32_t destination_apic_id) {
  * finished.
 */
 void dune_apic_eoi() {
-	//TODO: 32 or 64 bits? Does it matter?
-	wrmsrl(MSR_X2APIC_EOI, EOI_ACK);
+	wrmsrl(APIC_EOI_MSR, EOI_ACK);
 }

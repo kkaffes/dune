@@ -9,17 +9,14 @@
 #include "libdune/cpu-x86.h"
 
 #define THREAD_2_CORE 10
-#define THREAD_2_LOCAL_APIC_ID 40
 #define TEST_VECTOR 0xf2
 
 volatile bool t2_ready = false;
-bool received_posted_ipi = false;
+volatile bool received_posted_ipi = false;
 
-static void test_handler(struct dune_tf *tf)
-{
+static void test_handler(struct dune_tf *tf) {
 	printf("posted_ipi: received posted IPI!\n");
 	received_posted_ipi = true;
-	//TODO: Send EOI
 	dune_apic_eoi();
 }
 
@@ -30,13 +27,7 @@ void *t2_start(void *arg) {
 		return NULL;
 	}
         
-	//TODO: Can I remove this?
-	asm("sti");
-
-        printf("APID ID (thread 2): %u\n", dune_apic_id());	
-	
 	dune_register_intr_handler(TEST_VECTOR, test_handler);
-	//TODO: Is this memory fence necessary?
 	asm volatile("mfence" ::: "memory");
 	t2_ready = true;
 	while (!received_posted_ipi);
@@ -66,17 +57,11 @@ int main(int argc, char *argv[])
         pthread_create(&t2, &attr, t2_start, NULL);
 
 	while (!t2_ready);
-	//TODO: Is this memory fence necessary?
 	asm volatile("mfence" ::: "memory");
-
-	printf("HERE\n");
-        printf("APID ID: %u\n", dune_apic_id());
-
-	//TODO: Send posted IPI
+	printf("posted_ipi: About to send posted IPI\n");
 	dune_apic_send_ipi(TEST_VECTOR, apic_id_for_cpu(THREAD_2_CORE));
 
 	pthread_join(t2, NULL);
 
 	return 0;
 }
-
