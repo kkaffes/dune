@@ -59,7 +59,7 @@ int main(int argc, char *argv[])
 	while (!t2_ready);
 	asm volatile("mfence" ::: "memory");
 	printf("posted_ipi: About to send posted IPI\n");
-	dune_apic_send_ipi(TEST_VECTOR, apic_id_for_cpu(THREAD_2_CORE));
+	dune_apic_send_ipi(TEST_VECTOR, apic_id_for_cpu(THREAD_2_CORE, NULL));
 
 	pthread_join(t2, NULL);
 

@@ -41,8 +41,11 @@ void apic_init_rt_entry() {
 	asm("mfence" ::: "memory");
 }
 
-uint32_t apic_id_for_cpu(uint32_t cpu) {
-	if (cpu >= num_rt_entries) return -1;
+uint32_t apic_id_for_cpu(uint32_t cpu, bool *error) {
+	if (cpu >= num_rt_entries) {
+            if (error) *error = true;
+            return 0;
+        }
 	return apic_routing[cpu];
 }
 

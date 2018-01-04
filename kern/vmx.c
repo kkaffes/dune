@@ -997,8 +997,9 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
  */
 static void send_posted_ipi(uint32_t apic_id, uint8_t vector) {
     posted_interrupt_desc *desc;
-    u32 cpu_id = apic_get_cpu_id_for_apic(apic_id);
-    if (cpu_id < 0) {
+    bool cpu_id_error = false;
+    u32 cpu_id = apic_get_cpu_id_for_apic(apic_id, &cpu_id_error);
+    if (cpu_id_error) {
 	//the local APIC ID either doesn't exist or corresponds to a core
 	//that the Dune process is not running on
 	return;
