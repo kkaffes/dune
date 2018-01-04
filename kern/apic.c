@@ -1,6 +1,3 @@
-/* These functions are used to send and receive posted IPIs with an x2APIC.
-*/
-
 #define _GNU_SOURCE
 
 #include <linux/mm.h>
@@ -15,24 +12,23 @@
 static int apic_routing[100];
 static int num_rt_entries = 100;
 
-u32 dune_apic_id() {
-        long long apic_id;
-        rdmsrl(APIC_ID_MSR, apic_id);
-        return (u32)apic_id;
+#define BY_APIC_TYPE(x, x2) if (x2apic_enabled()) { x2; } else { x; }
+
+u32 apic_id(void) {
+	return read_apic_id();
 }
 
-void setup_apic() {
+void apic_init(void) {
         memset(apic_routing, -1, sizeof(int) * num_rt_entries);
         asm("mfence" ::: "memory");
 }
 
-void apic_init_rt_entry() {
-        int core_id = sched_getcpu();
-        apic_routing[dune_apic_id()] = core_id;
+void apic_init_rt_entry(void) {
+        apic_routing[apic_id()] = raw_smp_processor_id();
         asm("mfence" ::: "memory");
 }
 
-u32 cpu_id_for_apic(u32 apic) {
+u32 apic_get_cpu_id_for_apic(u32 apic) {
         if (apic >= num_rt_entries) return -1;
         return apic_routing[apic];
 }
@@ -47,7 +43,6 @@ u32 cpu_id_for_apic(u32 apic) {
 static inline void apic_write_x(u32 reg, u32 v)
 {
 	volatile u32 *addr = (volatile u32 *)(APIC_BASE + reg);
-
 	asm volatile("movl %0, %P1" : "=r" (v), "=m" (*addr) : "i" (0), "0" (v), "m" (*addr));
 }
 
@@ -60,12 +55,8 @@ static inline void apic_write_x(u32 reg, u32 v)
 static void apic_send_ipi_x2(u8 vector, u32 destination_apic_id) {
 	u32 low;
 	low = __prepare_ICR(0, vector, APIC_DEST_PHYSICAL);
-	printk(KERN_INFO "ICR value %x\n", low);
-	//native_x2apic_icr_write(low, destination_apic_id);
-
 	x2apic_wrmsr_fence();
 	wrmsrl(APIC_BASE_MSR + (APIC_ICR >> 4), ((__u64) destination_apic_id) << 32 | low);
-	printk(KERN_INFO "DONE\n");
 }
 
 /* apic_send_ipi_x
@@ -86,11 +77,8 @@ static void apic_send_ipi_x(u8 vector, u8 destination_apic_id) {
  * [destination_apic_id] is the ID of the local APIC that will receive the IPI.
  */
 void apic_send_ipi(u8 vector, u32 destination_apic_id) {
-	if (x2apic_enabled()) {
-		apic_send_ipi_x2(vector, destination_apic_id);
-	} else {
-		apic_send_ipi_x(vector, (u8)destination_apic_id);
-	}
+	BY_APIC_TYPE(apic_send_ipi_x(vector, (u8)destination_apic_id),
+		     apic_send_ipi_x2(vector, destination_apic_id))
 }
 
 /* apic_write_eoi
@@ -102,9 +90,6 @@ void apic_send_ipi(u8 vector, u32 destination_apic_id) {
  * [destination_apic_id] is the ID of the local APIC that will receive the IPI.
  */
 void apic_write_eoi(void) {
-	if (x2apic_enabled()) {
-		wrmsrl(APIC_BASE_MSR + (APIC_EOI >> 4), APIC_EOI_ACK);
-	} else {
-		apic_write_x(XAPIC_EOI_OFFSET, APIC_EOI_ACK);
-	}
+	BY_APIC_TYPE(apic_write_x(XAPIC_EOI_OFFSET, APIC_EOI_ACK),
+		     wrmsrl(APIC_BASE_MSR + (APIC_EOI >> 4), APIC_EOI_ACK))
 }

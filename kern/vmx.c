@@ -70,11 +70,6 @@ static atomic_t vmx_enable_failed;
 static DECLARE_BITMAP(vmx_vpid_bitmap, VMX_NR_VPIDS);
 static DEFINE_SPINLOCK(vmx_vpid_lock);
 
-//TODO: Should these definitions be moved elsewhere?
-#define MSR_X2APIC_ID 0x802
-#define MSR_X2APIC_ICR 0x830
-#define MSR_X2APIC_EOI 0x80B
-
 typedef struct posted_interrupt_desc {
     u32 vectors[8]; /* posted interrupt vectors */
     u32 extra[8]; /* outstanding notification indicator and extra space the VMM can use */
@@ -381,7 +376,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 		return -EIO;
 
 	rdmsrl(MSR_IA32_VMX_PINBASED_CTLS, vmx_capability.pin_based);
-	if (vmx_capability.pin_based & (1 << 55)) {
+	if (vmx_capability.pin_based & (((u64)1) << 55)) {
 		rdmsrl(MSR_IA32_VMX_TRUE_PINBASED_CTLS, vmx_capability.pin_based);
 	}
 
@@ -978,11 +973,9 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
 	vapic_page = virtual_apic_pages[raw_smp_processor_id()];
 	memset(vapic_page, 0x00, PAGE_SIZE);
 	
-	//get the local APIC ID
-	local_apic_id = read_apic_id();
-	apic_map[raw_smp_processor_id()] = (struct apic_map)
-					   { .core = raw_smp_processor_id(), 
-					     .local_apic_id = local_apic_id };
+	//initialize the routing table entry and get the local APIC ID
+	apic_init_rt_entry();
+	local_apic_id = apic_id();
 	vapic_write(vapic_page, LOCAL_APIC_ID, local_apic_id);
 
 	//add the virtual apic page physical address to the VMCS
@@ -992,7 +985,6 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
 	vmcs_write16(POSTED_INTR_NV, POSTED_INTR_VECTOR);
 	posted_interrupt_descriptor = posted_interrupt_descriptors[raw_smp_processor_id()];
 	memset(posted_interrupt_descriptor, 0x00, PAGE_SIZE);
-	printk(KERN_INFO "Posted interrupt descriptor %lx\n", __pa(posted_interrupt_descriptor));
 	vmcs_write64(POSTED_INTR_DESC_ADDR, __pa(posted_interrupt_descriptor));
 }
 
@@ -1004,10 +996,14 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
  * modify this descriptor even when the VMCS it belongs to is active.
  */
 static void send_posted_ipi(uint32_t apic_id, uint8_t vector) {
-    //TODO: Need to map apic id to cpu
-    posted_interrupt_desc *desc = posted_interrupt_descriptors[10];
-   
-    printk(KERN_INFO "Send posted IPI (apic_id %u, desc %p)\n", apic_id, desc);
+    posted_interrupt_desc *desc;
+    u32 cpu_id = apic_get_cpu_id_for_apic(apic_id);
+    if (cpu_id < 0) {
+	//the local APIC ID either doesn't exist or corresponds to a core
+	//that the Dune process is not running on
+	return;
+    }
+    desc = posted_interrupt_descriptors[cpu_id];
  
     //first set the posted-interrupt request
     if (test_and_set_bit(vector, (unsigned long *)desc->vectors)) {
@@ -1725,7 +1721,7 @@ static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
 	msr_data = (vcpu->regs[VCPU_REGS_RAX] & -1u)
                        | ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32);
 	switch (msr_addr) {
-		case MSR_X2APIC_ICR:
+		case (APIC_BASE_MSR + (APIC_ICR >> 4)):
 			vmx_emulate_icr_write(msr_data);
 			break;
 		default:
@@ -1744,15 +1740,8 @@ static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
  * This function calls the appropriate handling function in the kernel as though
  * the interrupt were never intercepted.
  */
-static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu)
+static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu, u32 exit_intr_info)
 {
-
-	u32 exit_intr_info;
-
-	vmx_get_cpu(vcpu);
-        exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
-	vmx_put_cpu(vcpu);
-
         if ((exit_intr_info & (INTR_INFO_VALID_MASK | INTR_INFO_INTR_TYPE_MASK))
                         == (INTR_INFO_VALID_MASK | INTR_TYPE_EXT_INTR)) {
 
@@ -1816,10 +1805,6 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 	printk(KERN_ERR "vmx: created VCPU (VPID %d)\n",
 	       vcpu->vpid);
 
-	vmx_get_cpu(vcpu);
-	printk(KERN_INFO "Posted interrupt desc for VPID %d is %p\n", vcpu->vpid, (void *)vmcs_read64(POSTED_INTR_DESC_ADDR));
-	vmx_put_cpu(vcpu);
-
 	while (1) {
 		vmx_get_cpu(vcpu);
 
@@ -1862,7 +1847,7 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 			asm("int $2");
 		}
 
-                vmx_handle_external_interrupt(vcpu);
+                vmx_handle_external_interrupt(vcpu, exit_intr_info);
 	
 		local_irq_enable();
 
@@ -1884,7 +1869,6 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 			if (vmx_handle_nmi_exception(vcpu))
 				done = 1;
 		} else if (ret == EXIT_REASON_MSR_WRITE) {
-			printk(KERN_INFO "Need to handle MSR write\n");
 			if (vmx_handle_msr_write(vcpu))
 				done = 1;
 		} else if (ret != EXIT_REASON_EXTERNAL_INTERRUPT) {
@@ -2030,7 +2014,6 @@ __init int vmx_init(void)
 	if (!msr_bitmap) {
 		return -ENOMEM;
 	}
-	/* FIXME: do we need APIC virtualization (flexpriority?) */
 
 	memset(msr_bitmap, 0xff, PAGE_SIZE);
 	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_FS_BASE);
@@ -2038,20 +2021,22 @@ __init int vmx_init(void)
 	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_PKG_ENERGY_STATUS);
 	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_RAPL_POWER_UNIT);
 
-	//allow access to the virtual x2APIC MSRs
-	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_X2APIC_ID);
+	
+	/* APIC virtualization and posted interrupts */
+	__vmx_disable_intercept_for_msr(msr_bitmap, APIC_BASE_MSR + (APIC_ID >> 4));
 	//__vmx_disable_intercept_for_msr(msr_bitmap, MSR_X2APIC_ICR);
-	__vmx_disable_intercept_for_msr(msr_bitmap, MSR_X2APIC_EOI);
+	__vmx_disable_intercept_for_msr(msr_bitmap, APIC_BASE_MSR + (APIC_EOI >> 4));
+
+	apic_init();
 
 	for_each_possible_cpu(cpu) {
 		virtual_apic_pages[cpu] = (void *)__get_free_page(GFP_KERNEL);
 		if (!virtual_apic_pages[cpu]) {
 			return -ENOMEM;
 		}
-		//each descriptor only needs to be 64 bytes... does giving a page really matter?
+		//TODO: each descriptor only needs to be 64 bytes... does giving a page really matter?
 		//if the size is changed, be sure to update setup_vapic()
 		posted_interrupt_descriptors[cpu] = (posted_interrupt_desc *)__get_free_page(GFP_KERNEL);
-		printk(KERN_INFO "Set up posted interrupt descriptor for cpu %u\n", cpu);
 		if (!posted_interrupt_descriptors[cpu]) {
 			return -ENOMEM;
 		}

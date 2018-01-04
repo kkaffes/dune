@@ -1,7 +1,6 @@
-static struct apic_map {
-	unsigned core;
-	uint32_t local_apic_id;
-} apic_map[NR_CPUS];
-
-void apic_send_ipi(uint8_t vector, uint32_t destination_apic_id);
+u32 apic_id(void);
+void apic_init(void);
+void apic_init_rt_entry(void);
+u32 apic_get_cpu_id_for_apic(u32 apic);
+void apic_send_ipi(u8 vector, u32 destination_apic_id);
 void apic_write_eoi(void);
