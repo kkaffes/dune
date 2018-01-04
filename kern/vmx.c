@@ -75,9 +75,6 @@ static DEFINE_SPINLOCK(vmx_vpid_lock);
 #define MSR_X2APIC_ICR 0x830
 #define MSR_X2APIC_EOI 0x80B
 
-bool core_10_out = true;
-bool sent_posted_ipi = false;
-
 typedef struct posted_interrupt_desc {
     u32 vectors[8]; /* posted interrupt vectors */
     u32 extra[8]; /* outstanding notification indicator and extra space the VMM can use */
@@ -168,6 +165,11 @@ static inline bool cpu_has_vmx_invept_global(void)
 static inline bool cpu_has_vmx_ept_ad_bits(void)
 {
 	return vmx_capability.ept & VMX_EPT_AD_BIT;
+}
+
+static inline bool cpu_has_posted_interrupts(void)
+{
+	return (vmx_capability.pin_based >> 32) & PIN_BASED_POSTED_INTR;
 }
 
 static inline void __invept(int ext, u64 eptp, gpa_t gpa)
@@ -372,12 +374,16 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	u32 _vmexit_control = 0;
 	u32 _vmentry_control = 0;
 
-	//TODO: Move [PIN_BASED_POST_INTR] to optional variable [opt]
-	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING | PIN_BASED_POSTED_INTR;
-	opt = PIN_BASED_VIRTUAL_NMIS;
+	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING;
+	opt = PIN_BASED_VIRTUAL_NMIS | PIN_BASED_POSTED_INTR;
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_PINBASED_CTLS,
 				&_pin_based_exec_control) < 0)
 		return -EIO;
+
+	rdmsrl(MSR_IA32_VMX_PINBASED_CTLS, vmx_capability.pin_based);
+	if (vmx_capability.pin_based & (1 << 55)) {
+		rdmsrl(MSR_IA32_VMX_TRUE_PINBASED_CTLS, vmx_capability.pin_based);
+	}
 
 	min =
 #ifdef CONFIG_X86_64
@@ -402,17 +408,15 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 					   ~CPU_BASED_CR8_STORE_EXITING;
 #endif
 	if (_cpu_based_exec_control & CPU_BASED_ACTIVATE_SECONDARY_CONTROLS) {
-		//TODO: Move [SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE] and [SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY]
-		//to optional [opt]
-		min2 =  SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE |
-			SECONDARY_EXEC_APIC_REGISTER_VIRT |
-			SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY;
-		
+		min2 = 0;
 		opt2 =  SECONDARY_EXEC_WBINVD_EXITING |
 			SECONDARY_EXEC_ENABLE_VPID |
 			SECONDARY_EXEC_ENABLE_EPT |
 			SECONDARY_EXEC_RDTSCP |
-			SECONDARY_EXEC_ENABLE_INVPCID;
+			SECONDARY_EXEC_ENABLE_INVPCID |
+			SECONDARY_EXEC_VIRTUALIZE_X2APIC_MODE |
+			SECONDARY_EXEC_APIC_REGISTER_VIRT |
+			SECONDARY_EXEC_VIRTUAL_INTR_DELIVERY;
 		if (adjust_vmx_controls(min2, opt2,
 					MSR_IA32_VMX_PROCBASED_CTLS2,
 					&_cpu_based_2nd_exec_control) < 0)
@@ -435,10 +439,10 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 
 	min = 0;
 #ifdef CONFIG_X86_64
-	min |= VM_EXIT_HOST_ADDR_SPACE_SIZE | VM_EXIT_ACK_INTR_ON_EXIT;
+	min |= VM_EXIT_HOST_ADDR_SPACE_SIZE;
 #endif
 //	opt = VM_EXIT_SAVE_IA32_PAT | VM_EXIT_LOAD_IA32_PAT;
-	opt = 0;
+	opt = VM_EXIT_ACK_INTR_ON_EXIT;
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_EXIT_CTLS,
 				&_vmexit_control) < 0)
 		return -EIO;
@@ -1706,22 +1710,20 @@ static int vmx_handle_nmi_exception(struct vmx_vcpu *vcpu)
 }
 
 static void vmx_emulate_icr_write(u64 icr) {
-        u32 destination = (u32)(icr >> 32);
-        u8 vector = icr & 0xFF;
-	send_posted_ipi(destination, vector);
-	//apic_send_ipi(POSTED_INTR_VECTOR, destination);
+	if (cpu_has_posted_interrupts()) {
+        	u32 destination = (u32)(icr >> 32);
+        	u8 vector = icr & 0xFF;
+		send_posted_ipi(destination, vector);
+	}
 }
 
 static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
 {
 	u32 msr_addr;
 	u64 msr_data;
-        //TODO: What is vmx_get_cpu() for?
-        vmx_get_cpu(vcpu);
 	msr_addr = vcpu->regs[VCPU_REGS_RCX];
 	msr_data = (vcpu->regs[VCPU_REGS_RAX] & -1u)
                        | ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32);
-        vmx_put_cpu(vcpu);
 	switch (msr_addr) {
 		case MSR_X2APIC_ICR:
 			vmx_emulate_icr_write(msr_data);
@@ -1851,17 +1853,7 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 
 		setup_perf_msrs(vcpu);
 
-		if (raw_smp_processor_id() == 10) {
-			core_10_out = false;
-		}
-		asm("mfence" ::: "memory");
-
 		ret = vmx_run_vcpu(vcpu);
-
-		if (raw_smp_processor_id() == 10) {
-			core_10_out = true;
-		}
-		asm("mfence" ::: "memory");
 
 		/* We need to handle NMIs before interrupts are enabled */
 		exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
