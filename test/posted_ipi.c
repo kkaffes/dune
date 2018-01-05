@@ -56,6 +56,8 @@ int main(int argc, char *argv[])
         pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpus);
         pthread_create(&t2, &attr, t2_start, NULL);
 
+	printf("APIC ID %u\n", dune_apic_id());
+
 	while (!t2_ready);
 	asm volatile("mfence" ::: "memory");
 	printf("posted_ipi: About to send posted IPI\n");

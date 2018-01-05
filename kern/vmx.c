@@ -162,6 +162,11 @@ static inline bool cpu_has_vmx_ept_ad_bits(void)
 	return vmx_capability.ept & VMX_EPT_AD_BIT;
 }
 
+static inline bool cpu_has_apic_register_virt(void)
+{
+	return (vmx_capability.secondary >> 32) & SECONDARY_EXEC_APIC_REGISTER_VIRT;
+}
+
 static inline bool cpu_has_posted_interrupts(void)
 {
 	return (vmx_capability.pin_based >> 32) & PIN_BASED_POSTED_INTR;
@@ -431,6 +436,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 		rdmsr(MSR_IA32_VMX_EPT_VPID_CAP,
 		      vmx_capability.ept, vmx_capability.vpid);
 	}
+	rdmsrl(MSR_IA32_VMX_PROCBASED_CTLS2, vmx_capability.secondary);
 
 	min = 0;
 #ifdef CONFIG_X86_64
@@ -952,6 +958,14 @@ enum vapic_reg {
 	LOCAL_APIC_ID
 };
 
+/*
+ * vapic_write
+ * Writes to the virtual APIC page.
+ *
+ * [vapic_page] is a pointer to the virtual APIC page.
+ * [reg] is the register to write to within the virtual APIC page.
+ * [value] is the value to write within the virtual APIC page.
+ */
 static void vapic_write(void *vapic_page, enum vapic_reg reg, u64 value) {
 	size_t offset = 0x0;
 	switch (reg) {
@@ -970,19 +984,21 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
 	void *vapic_page, *posted_interrupt_descriptor;
 	u32 local_apic_id;
 	
-	vapic_page = virtual_apic_pages[raw_smp_processor_id()];
-	memset(vapic_page, 0x00, PAGE_SIZE);
-	
-	//initialize the routing table entry and get the local APIC ID
 	apic_init_rt_entry();
-	local_apic_id = apic_id();
-	vapic_write(vapic_page, LOCAL_APIC_ID, local_apic_id);
 
-	//add the virtual apic page physical address to the VMCS
-	vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, __pa(vapic_page));
+	if (cpu_has_apic_register_virt()) {
+		printk(KERN_INFO "Has APIC register virtualization\n");
+		vapic_page = virtual_apic_pages[raw_smp_processor_id()];
+		memset(vapic_page, 0x00, PAGE_SIZE);
+		local_apic_id = apic_id();
+		vapic_write(vapic_page, LOCAL_APIC_ID, local_apic_id);
+		vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, __pa(vapic_page));
+	} else {
+		printk(KERN_INFO "Does not have APIC register virtualization %llx\n", vmx_capability.secondary);
+	}
 
-	//now handle posted interrupts
 	if (cpu_has_posted_interrupts()) {
+		printk(KERN_INFO "Has posted interrupts\n");
 		vmcs_write16(POSTED_INTR_NV, POSTED_INTR_VECTOR);
 		posted_interrupt_descriptor = posted_interrupt_descriptors[raw_smp_processor_id()];
 		memset(posted_interrupt_descriptor, 0x00, PAGE_SIZE);
@@ -1022,9 +1038,7 @@ static void send_posted_ipi(u32 apic_id, u8 vector) {
     }
     
     //now send the posted interrupt vector to the destination
-    //TODO: IRQ save in KVM? _flat_send_IPI_mask() in kernel/apic/apic_flat_64.c
     //TODO: Need to check that the VMCS is active on the destination CPU?
-
     apic_send_ipi(POSTED_INTR_VECTOR, apic_id);
 }
 
@@ -1742,6 +1756,8 @@ static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
  *
  * This function calls the appropriate handling function in the kernel as though
  * the interrupt were never intercepted.
+ *
+ * This code is from KVM.
  */
 static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu, u32 exit_intr_info)
 {
@@ -1760,10 +1776,8 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu, u32 exit_intr_i
                 desc = (gate_desc *)vcpu->idt_base + vector;
                 entry = gate_offset(*desc);
 	
-		printk(KERN_INFO "Handle external interrupt on core %d (%x)\n", raw_smp_processor_id(), vector);
 		if (vector == POSTED_INTR_VECTOR) {
 			//TODO: Is this an error case when posted interrupts are enabled?
-			printk(KERN_INFO "Got posted intr\n");
 			apic_write_eoi();
 			return;
 		}
@@ -1783,7 +1797,6 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu, u32 exit_intr_i
                         [sp]"=&r"(tmp),
 #endif
 			"+r" (current_stack_pointer)
-                        //TODO: Why isn't this constant working rather than having to use the line above? //ASM_CALL_CONSTRAINT
                         :     
                         [entry]"r"(entry),
                         [ss]"i"(__KERNEL_DS),
@@ -2026,6 +2039,8 @@ __init int vmx_init(void)
 
 	
 	/* APIC virtualization and posted interrupts */
+
+	//TODO: Enable intercept for computers that don't support APIC register virtualization
 	__vmx_disable_intercept_for_msr(msr_bitmap, APIC_BASE_MSR + (APIC_ID >> 4));
 	//__vmx_disable_intercept_for_msr(msr_bitmap, MSR_X2APIC_ICR);
 	__vmx_disable_intercept_for_msr(msr_bitmap, APIC_BASE_MSR + (APIC_EOI >> 4));

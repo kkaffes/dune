@@ -17,6 +17,7 @@ struct vmcs {
 
 struct vmx_capability {
 	u64 pin_based;
+	u64 secondary;
 	u32 ept;
 	u32 vpid;
 	int has_load_efer:1;
