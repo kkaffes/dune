@@ -28,8 +28,11 @@ void apic_init_rt_entry(void) {
         asm("mfence" ::: "memory");
 }
 
-u32 apic_get_cpu_id_for_apic(u32 apic) {
-        if (apic >= num_rt_entries) return -1;
+u32 apic_get_cpu_id_for_apic(u32 apic, bool *error) {
+        if (apic >= num_rt_entries) {
+            if (error) *error = true;
+            return 0;
+        }
         return apic_routing[apic];
 }
 

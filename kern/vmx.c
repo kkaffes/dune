@@ -952,7 +952,7 @@ enum vapic_reg {
 	LOCAL_APIC_ID
 };
 
-static void vapic_write(void *vapic_page, enum vapic_reg reg, uint64_t value) {
+static void vapic_write(void *vapic_page, enum vapic_reg reg, u64 value) {
 	size_t offset = 0x0;
 	switch (reg) {
 		case (LOCAL_APIC_ID):
@@ -962,7 +962,7 @@ static void vapic_write(void *vapic_page, enum vapic_reg reg, uint64_t value) {
 			return;
 			break;
 	}
-	*(uint64_t *)((char *)vapic_page + offset) = value;
+	*(u64 *)((char *)vapic_page + offset) = value;
 }
 
 static void setup_vapic(struct vmx_vcpu *vcpu)
@@ -982,10 +982,12 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
 	vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, __pa(vapic_page));
 
 	//now handle posted interrupts
-	vmcs_write16(POSTED_INTR_NV, POSTED_INTR_VECTOR);
-	posted_interrupt_descriptor = posted_interrupt_descriptors[raw_smp_processor_id()];
-	memset(posted_interrupt_descriptor, 0x00, PAGE_SIZE);
-	vmcs_write64(POSTED_INTR_DESC_ADDR, __pa(posted_interrupt_descriptor));
+	if (cpu_has_posted_interrupts()) {
+		vmcs_write16(POSTED_INTR_NV, POSTED_INTR_VECTOR);
+		posted_interrupt_descriptor = posted_interrupt_descriptors[raw_smp_processor_id()];
+		memset(posted_interrupt_descriptor, 0x00, PAGE_SIZE);
+		vmcs_write64(POSTED_INTR_DESC_ADDR, __pa(posted_interrupt_descriptor));
+	}
 }
 
 /*
@@ -995,7 +997,7 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
  * instructions to modify a posted interrupt descriptor. It is safe to
  * modify this descriptor even when the VMCS it belongs to is active.
  */
-static void send_posted_ipi(uint32_t apic_id, uint8_t vector) {
+static void send_posted_ipi(u32 apic_id, u8 vector) {
     posted_interrupt_desc *desc;
     bool cpu_id_error = false;
     u32 cpu_id = apic_get_cpu_id_for_apic(apic_id, &cpu_id_error);
@@ -1009,7 +1011,7 @@ static void send_posted_ipi(uint32_t apic_id, uint8_t vector) {
     //first set the posted-interrupt request
     if (test_and_set_bit(vector, (unsigned long *)desc->vectors)) {
         //bit already set, so the interrupt is already pending (and
-        //the outstanding bit is 1)
+        //the outstanding notification bit is 1)
         return;
     }
     
