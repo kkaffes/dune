@@ -1810,6 +1810,9 @@ STACK_FRAME_NON_STANDARD(vmx_handle_external_interrupt);
  * inserted into the guest OS.
  *
  * Part of the algorithm here is from section 29.6 of the Intel manual.
+ * According to the Intel manual (section 29.2.1), virtual interrupts are
+ * delivered on VM entry, so we just need to set the vIRR and the RVI here,
+ * and the interrupt will be delivered on VM entry.
  */
 static void vmx_handle_queued_interrupts(struct vmx_vcpu *vcpu)
 {
@@ -1822,7 +1825,7 @@ static void vmx_handle_queued_interrupts(struct vmx_vcpu *vcpu)
 		long i;
 		for (i = 0; i < 256; i++) {
 			if (test_and_clear_bit(i, (unsigned long *)desc->vectors)) {
-				//set the corresponding bit in the VIRR
+				//set the corresponding bit in the vIRR
 				void *vapic_page = __va(vmcs_read64(VIRTUAL_APIC_PAGE_ADDR));
 				u32 *to_set = (u32 *)((char *)vapic_page + (0x200 | ((i & 0xE0) >> 1)));
 				//set the bit at position (i & 0x1F)
