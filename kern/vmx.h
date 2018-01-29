@@ -50,11 +50,17 @@ enum vmx_reg {
 	NR_VCPU_REGS
 };
 
+enum vmx_mode {
+	IN_GUEST_MODE,
+	IN_HOST_MODE
+};
+
 struct vmx_vcpu {
 	struct list_head list;
 	int cpu;
 	int vpid;
 	int launched;
+	enum vmx_mode mode;
 
 	struct mmu_notifier mmu_notifier;
 	spinlock_t ept_lock;

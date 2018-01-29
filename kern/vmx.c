@@ -76,6 +76,7 @@ typedef struct posted_interrupt_desc {
 } __aligned(64) posted_interrupt_desc;
 
 static unsigned long *msr_bitmap;
+//static struct vmx_vcpu *vcpus_hash[NR_CPUS];
 static void *virtual_apic_pages[NR_CPUS];
 static posted_interrupt_desc *posted_interrupt_descriptors[NR_CPUS];
 
@@ -987,18 +988,14 @@ static void setup_vapic(struct vmx_vcpu *vcpu)
 	apic_init_rt_entry();
 
 	if (cpu_has_apic_register_virt()) {
-		printk(KERN_INFO "Has APIC register virtualization\n");
 		vapic_page = virtual_apic_pages[raw_smp_processor_id()];
 		memset(vapic_page, 0x00, PAGE_SIZE);
 		local_apic_id = apic_id();
 		vapic_write(vapic_page, LOCAL_APIC_ID, local_apic_id);
 		vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, __pa(vapic_page));
-	} else {
-		printk(KERN_INFO "Does not have APIC register virtualization %llx\n", vmx_capability.secondary);
 	}
 
 	if (cpu_has_posted_interrupts()) {
-		printk(KERN_INFO "Has posted interrupts\n");
 		vmcs_write16(POSTED_INTR_NV, POSTED_INTR_VECTOR);
 		posted_interrupt_descriptor = posted_interrupt_descriptors[raw_smp_processor_id()];
 		memset(posted_interrupt_descriptor, 0x00, PAGE_SIZE);
@@ -1038,7 +1035,6 @@ static void send_posted_ipi(u32 apic_id, u8 vector) {
     }
     
     //now send the posted interrupt vector to the destination
-    //TODO: Need to check that the VMCS is active on the destination CPU?
     apic_send_ipi(POSTED_INTR_VECTOR, apic_id);
 }
 
@@ -1235,6 +1231,7 @@ static struct vmx_vcpu * vmx_create_vcpu(struct dune_config *conf)
 	if (vmx_allocate_vpid(vcpu))
 		goto fail_vpid;
 
+	vcpu->mode = IN_HOST_MODE;
 	vcpu->cpu = -1;
 	vcpu->syscall_tbl = (void *) &dune_syscall_tbl;
 
@@ -1259,6 +1256,7 @@ static struct vmx_vcpu * vmx_create_vcpu(struct dune_config *conf)
 	if (vmx_create_ept(vcpu))
 		goto fail_ept;
 
+	//vcpus_hash[raw_smp_processor_id()] = vcpu;
 	return vcpu;
 
 fail_ept:
@@ -1806,6 +1804,41 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu, u32 exit_intr_i
 }
 STACK_FRAME_NON_STANDARD(vmx_handle_external_interrupt);
 
+/* vmx_handle_queued_interrupts - sometimes a posted interrupt is sent to a core
+ * that is not currently in VMX non-root mode. In this case, the interrupt
+ * is still pending in the posted interrupt descriptor, but it needs to be
+ * inserted into the guest OS.
+ *
+ * Part of the algorithm here is from section 29.6 of the Intel manual.
+ */
+static void vmx_handle_queued_interrupts(struct vmx_vcpu *vcpu)
+{
+	//TODO: Does this have synchronization issues?
+	struct posted_interrupt_desc *desc = posted_interrupt_descriptors[raw_smp_processor_id()];
+	if (test_and_clear_bit(0, (unsigned long *)desc->extra)) {
+		//there is a pending interrupt(s)
+		u16 guest_interrupt_status = vmcs_read16(GUEST_INTR_STATUS);
+		u8 rvi = guest_interrupt_status & 0xFF;
+		long i;
+		for (i = 0; i < 256; i++) {
+			if (test_and_clear_bit(i, (unsigned long *)desc->vectors)) {
+				//set the corresponding bit in the VIRR
+				void *vapic_page = __va(vmcs_read64(VIRTUAL_APIC_PAGE_ADDR));
+				u32 *to_set = (u32 *)((char *)vapic_page + (0x200 | ((i & 0xE0) >> 1)));
+				//set the bit at position (i & 0x1F)
+				u32 mask = 1 << (i & 0x1F);
+				*to_set |= mask;
+
+				//update the value to be written to RVI
+				rvi = rvi > i ? rvi : i;
+			}
+		}
+                //set RVI
+		guest_interrupt_status |= (u16)rvi;
+		vmcs_write16(GUEST_INTR_STATUS, guest_interrupt_status);
+	}
+}
+
 /**
  * vmx_launch - the main loop for a VMX Dune process
  * @conf: the launch configuration
@@ -1835,6 +1868,11 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 
 		local_irq_disable();
 
+		//set mode to [IN_GUEST_MODE] after disabling interrupts
+		//now posted interrupts won't be delivered until after the CPU
+		//is back in non-root mode
+		vcpu->mode = IN_GUEST_MODE;
+
 		if (need_resched()) {
 			local_irq_enable();
 			vmx_put_cpu(vcpu);
@@ -1853,8 +1891,10 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 		}
 
 		setup_perf_msrs(vcpu);
-
+		vmx_handle_queued_interrupts(vcpu);
+		
 		ret = vmx_run_vcpu(vcpu);
+		vcpu->mode = IN_HOST_MODE;
 
 		/* We need to handle NMIs before interrupts are enabled */
 		exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
