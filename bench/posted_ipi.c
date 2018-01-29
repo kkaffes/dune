@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
 
 	while (!t2_ready);
 	asm volatile("mfence" ::: "memory");
-	printf("posted_ipi: About to send posted IPI\n");
+	printf("posted_ipi: about to send posted IPI\n");
 
 	unsigned long rdtsc_overhead = measure_tsc_overhead();
 	synch_tsc();
