@@ -13,7 +13,7 @@
 #define THREAD_2_CORE 10
 #define TEST_VECTOR 0xf2
 
-#define NUM_ITERATIONS 10000
+#define NUM_ITERATIONS 1000000
 
 volatile bool t2_ready = false;
 volatile bool wait = true;

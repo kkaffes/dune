@@ -76,7 +76,6 @@ typedef struct posted_interrupt_desc {
 } __aligned(64) posted_interrupt_desc;
 
 static unsigned long *msr_bitmap;
-//static struct vmx_vcpu *vcpus_hash[NR_CPUS];
 static void *virtual_apic_pages[NR_CPUS];
 static posted_interrupt_desc *posted_interrupt_descriptors[NR_CPUS];
 
@@ -1231,7 +1230,6 @@ static struct vmx_vcpu * vmx_create_vcpu(struct dune_config *conf)
 	if (vmx_allocate_vpid(vcpu))
 		goto fail_vpid;
 
-	vcpu->mode = IN_HOST_MODE;
 	vcpu->cpu = -1;
 	vcpu->syscall_tbl = (void *) &dune_syscall_tbl;
 
@@ -1256,7 +1254,6 @@ static struct vmx_vcpu * vmx_create_vcpu(struct dune_config *conf)
 	if (vmx_create_ept(vcpu))
 		goto fail_ept;
 
-	//vcpus_hash[raw_smp_processor_id()] = vcpu;
 	return vcpu;
 
 fail_ept:
@@ -1871,7 +1868,6 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 		//set mode to [IN_GUEST_MODE] after disabling interrupts
 		//now posted interrupts won't be delivered until after the CPU
 		//is back in non-root mode
-		vcpu->mode = IN_GUEST_MODE;
 
 		if (need_resched()) {
 			local_irq_enable();
@@ -1894,7 +1890,6 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 		vmx_handle_queued_interrupts(vcpu);
 		
 		ret = vmx_run_vcpu(vcpu);
-		vcpu->mode = IN_HOST_MODE;
 
 		/* We need to handle NMIs before interrupts are enabled */
 		exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
