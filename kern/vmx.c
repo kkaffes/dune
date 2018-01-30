@@ -1720,6 +1720,7 @@ static int vmx_handle_nmi_exception(struct vmx_vcpu *vcpu)
 	return -EIO;
 }
 
+/*
 static inline void synch_tsc(void)
 {
         asm volatile("cpuid" : : : "%rax", "%rbx", "%rcx", "%rdx");
@@ -1754,23 +1755,24 @@ static unsigned long measure_tsc_overhead(void)
 
         return overhead;
 }
+*/
 
 static void vmx_emulate_icr_write(u64 icr) {
-	int i;
+	/*int i;
 	unsigned long start_tick, end_tick, latency;
 	unsigned long rdtsc_overhead = measure_tsc_overhead();
         synch_tsc();
         start_tick = rdtscll_dune();
-	for (i = 0; i < 1000000; i++) {
+	for (i = 0; i < 1000000; i++) { */
 		if (cpu_has_posted_interrupts()) {
         		u32 destination = (u32)(icr >> 32);
         		u8 vector = icr & 0xFF;
 			send_posted_ipi(destination, vector);
 		}
-	}
+	/* }
 	end_tick = rdtscllp_dune();
         latency = (end_tick - start_tick - rdtsc_overhead) / 1000000;
-        printk(KERN_INFO "Latency: %ld cycles.\n", latency);
+        printk(KERN_INFO "Latency: %ld cycles.\n", latency); */
 }
 
 static int vmx_handle_msr_write(struct vmx_vcpu *vcpu)
