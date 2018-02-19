@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
 	dune_register_intr_handler(T_DIVIDE, divide_by_zero_handler);
 
         u64 count = 0;
-        while (true) printf("Hello %lu\n", count++);
+        while (true) printf("Hello %lu (core = %d)\n", count++, sched_getcpu());
 
 	ret = 1 / ret; /* divide by zero */
 

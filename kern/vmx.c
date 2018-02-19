@@ -980,27 +980,44 @@ static void vapic_write(void *vapic_page, enum vapic_reg reg, u64 value) {
 	*(u64 *)((char *)vapic_page + offset) = value;
 }
 
+/* update_vapic_addresses - if a thread is not pinned to a core, it can be scheduled
+ * on a different core from the core it was originally created on. Thus, the vcpu
+ * must be updated to use the virtual APIC page and the posted interrupt descriptor
+ * that correspond to the core it is currently running on.
+ */
+static inline void update_vapic_addresses(struct vmx_vcpu *vcpu) {
+        void *vapic_page, *posted_interrupt_descriptor;
+
+        printk(KERN_INFO "Reschedule for core %d\n", raw_smp_processor_id());
+
+        if (cpu_has_apic_register_virt()) {
+                vapic_page = virtual_apic_pages[raw_smp_processor_id()];
+                vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, __pa(vapic_page));
+        }
+
+        if (cpu_has_posted_interrupts()) {
+                posted_interrupt_descriptor = posted_interrupt_descriptors[raw_smp_processor_id()];
+                vmcs_write64(POSTED_INTR_DESC_ADDR, __pa(posted_interrupt_descriptor));
+        }
+}
+
 static void setup_vapic(struct vmx_vcpu *vcpu)
 {
-	void *vapic_page, *posted_interrupt_descriptor;
-	u32 local_apic_id;
-	
-	apic_init_rt_entry();
+        void *vapic_page;
+        u32 local_apic_id;
 
-	if (cpu_has_apic_register_virt()) {
-		vapic_page = virtual_apic_pages[raw_smp_processor_id()];
-		memset(vapic_page, 0x00, PAGE_SIZE);
-		local_apic_id = apic_id();
-		vapic_write(vapic_page, LOCAL_APIC_ID, local_apic_id);
-		vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, __pa(vapic_page));
-	}
+        apic_init_rt_entry();
+        update_vapic_addresses(vcpu);
 
-	if (cpu_has_posted_interrupts()) {
-		vmcs_write16(POSTED_INTR_NV, POSTED_INTR_VECTOR);
-		posted_interrupt_descriptor = posted_interrupt_descriptors[raw_smp_processor_id()];
-		memset(posted_interrupt_descriptor, 0x00, PAGE_SIZE);
-		vmcs_write64(POSTED_INTR_DESC_ADDR, __pa(posted_interrupt_descriptor));
-	}
+        if (cpu_has_apic_register_virt()) {
+                vapic_page = virtual_apic_pages[raw_smp_processor_id()];
+                local_apic_id = apic_id();
+                vapic_write(vapic_page, LOCAL_APIC_ID, local_apic_id);
+        }
+
+        if (cpu_has_posted_interrupts()) {
+                vmcs_write16(POSTED_INTR_NV, POSTED_INTR_VECTOR);
+        }
 }
 
 /*
@@ -1897,6 +1914,7 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 {
 	int ret, done = 0;
 	u32 exit_intr_info;
+	bool rescheduled = false;
 	struct vmx_vcpu *vcpu = vmx_create_vcpu(conf);
 	if (!vcpu)
 		return -ENOMEM;
@@ -1906,6 +1924,10 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 
 	while (1) {
 		vmx_get_cpu(vcpu);
+		if (rescheduled) {
+			update_vapic_addresses(vcpu);
+			rescheduled = false;
+		}
 
 		/*
 		 * We assume that a Dune process will always use
@@ -1919,6 +1941,7 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 		local_irq_disable();
 
 		if (need_resched()) {
+			rescheduled = true;
 			local_irq_enable();
 			vmx_put_cpu(vcpu);
 			cond_resched();
@@ -2134,12 +2157,14 @@ __init int vmx_init(void)
 
 	for_each_possible_cpu(cpu) {
 		virtual_apic_pages[cpu] = (void *)__get_free_page(GFP_KERNEL);
+		memset(virtual_apic_pages[cpu], 0x00, PAGE_SIZE);
 		if (!virtual_apic_pages[cpu]) {
 			return -ENOMEM;
 		}
 		//TODO: each descriptor only needs to be 64 bytes... does giving a page really matter?
 		//if the size is changed, be sure to update setup_vapic()
 		posted_interrupt_descriptors[cpu] = (posted_interrupt_desc *)__get_free_page(GFP_KERNEL);
+		memset(posted_interrupt_descriptors[cpu], 0x00, PAGE_SIZE);
 		if (!posted_interrupt_descriptors[cpu]) {
 			return -ENOMEM;
 		}
