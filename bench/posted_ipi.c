@@ -21,7 +21,6 @@ volatile bool done = false;
 
 static void test_handler(struct dune_tf *tf) {
 	dune_apic_eoi();
-	printf("About to set [wait]\n");
 	wait = false;
 }
 
@@ -72,12 +71,8 @@ int main(int argc, char *argv[])
 	int i;
 	for (i = 0; i < NUM_ITERATIONS; i++) {
 		dune_apic_send_ipi(TEST_VECTOR, apic_id_for_cpu(THREAD_2_CORE, NULL));
-		asm volatile("monitor" :: "a" (&wait), "c" (0), "d" (0) : "memory"); 
-		asm volatile("mwait" :: "a" (&wait), "c" (0) : "memory");
-		printf("mwait worked!!\n");
-		exit(0);
-		/*while (wait);
-		wait = true;*/
+		while (wait);
+		wait = true;
 	}
 
 	unsigned long end_tick = rdtscllp();

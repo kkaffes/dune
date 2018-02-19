@@ -988,8 +988,6 @@ static void vapic_write(void *vapic_page, enum vapic_reg reg, u64 value) {
 static inline void update_vapic_addresses(struct vmx_vcpu *vcpu) {
         void *vapic_page, *posted_interrupt_descriptor;
 
-        printk(KERN_INFO "Reschedule for core %d\n", raw_smp_processor_id());
-
         if (cpu_has_apic_register_virt()) {
                 vapic_page = virtual_apic_pages[raw_smp_processor_id()];
                 vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, __pa(vapic_page));
