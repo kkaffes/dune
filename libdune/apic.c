@@ -20,8 +20,6 @@ typedef uint32_t u32;
 #define NUM_CORES 100
 #define POSTED_INTR_VECTOR 0xF2
 
-#define APIC_BASE 0xfffffffffffff000
-
 #define APIC_ID_MSR 0x802
 #define APIC_ICR_MSR 0x830
 #define APIC_EOI_MSR 0x80B

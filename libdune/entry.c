@@ -258,6 +258,12 @@ static int setup_syscall(void)
 	return 0;
 }
 
+static int setup_apic_mapping(void)
+{
+	map_ptr((void *) APIC_BASE, 0);
+	return 0;
+}
+
 #define VSYSCALL_ADDR 0xffffffffff600000
 
 static void setup_vsyscall(void)
@@ -635,6 +641,11 @@ int dune_init(bool map_full)
 
 	if ((ret = setup_syscall())) {
 		printf("dune: unable to setup system calls\n");
+		goto err;
+	}
+
+	if ((ret = setup_apic_mapping())) {
+		printf("dune: unable to setup APIC\n");
 		goto err;
 	}
 
