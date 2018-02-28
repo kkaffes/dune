@@ -75,6 +75,8 @@ typedef struct posted_interrupt_desc {
     u32 extra[8]; /* outstanding notification indicator and extra space the VMM can use */
 } __aligned(64) posted_interrupt_desc;
 
+void *posted_interrupt_desc_region;
+
 static unsigned long *msr_bitmap;
 //static struct vmx_vcpu *vcpus_hash[NR_CPUS];
 static void *virtual_apic_pages[NR_CPUS];
@@ -2153,6 +2155,11 @@ __init int vmx_init(void)
 
 	apic_init();
 
+	//the descriptors need to be in a contiguous region of memory so that they can easily
+	//be accessed by non-root mode
+	posted_interrupt_desc_region = (void *)__get_free_pages(GFP_KERNEL, NR_CPUS);
+	//memset(posted_interrupt_desc_region, 0x00, PAGE_SIZE * NR_CPUS);
+
 	for_each_possible_cpu(cpu) {
 		virtual_apic_pages[cpu] = (void *)__get_free_page(GFP_KERNEL);
 		memset(virtual_apic_pages[cpu], 0x00, PAGE_SIZE);
@@ -2161,7 +2168,7 @@ __init int vmx_init(void)
 		}
 		//TODO: each descriptor only needs to be 64 bytes... does giving a page really matter?
 		//if the size is changed, be sure to update setup_vapic()
-		posted_interrupt_descriptors[cpu] = (posted_interrupt_desc *)__get_free_page(GFP_KERNEL);
+		posted_interrupt_descriptors[cpu] = (posted_interrupt_desc *)((char *)posted_interrupt_desc_region + (PAGE_SIZE * cpu));
 		memset(posted_interrupt_descriptors[cpu], 0x00, PAGE_SIZE);
 		if (!posted_interrupt_descriptors[cpu]) {
 			return -ENOMEM;

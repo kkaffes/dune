@@ -264,6 +264,15 @@ static int setup_apic_mapping(void)
 	return 0;
 }
 
+static int setup_posted_intr_desc_mapping(void)
+{
+	int i;
+	for (i = 0; i < NR_CPUS; i++) {
+		map_ptr((void *) (POSTED_INTR_DESCS_BASE + (i * PAGE_SIZE)), 0);
+	}
+	return 0;
+}
+
 #define VSYSCALL_ADDR 0xffffffffff600000
 
 static void setup_vsyscall(void)

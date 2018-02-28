@@ -155,6 +155,11 @@ static unsigned long gpa_to_hva(struct vmx_vcpu *vcpu,
 	if ((gpa & PAGE_MASK) == GPA_APIC_PAGE) {
 		return 0;
 	}
+	/* fake success when translating posted interrupt descriptors pages */
+	if ((gpa & PAGE_MASK) >= GPA_POSTED_INTR_DESCS &&
+	    (gpa & PAGE_MASK) <  GPA_POSTED_INTR_DESCS + (PAGE_SIZE * NR_CPUS)) {
+		return 0;
+	}
 
 	if (gpa < phys_end - GPA_STACK_SIZE - GPA_MAP_SIZE)
 		return gpa;
@@ -398,6 +403,41 @@ static int ept_map_apic_page(struct vmx_vcpu *vcpu, int make_write, unsigned lon
 	return 0;
 }
 
+static int ept_map_posted_intr_desc_page(struct vmx_vcpu *vcpu, int make_write, unsigned long gpa)
+{
+	int ret;
+	epte_t *epte, flags;
+	long addr;
+
+	spin_lock(&vcpu->ept_lock);
+	ret = ept_lookup_gpa(vcpu, (void *) gpa, 0, 1, &epte);
+	if (ret) {
+		spin_unlock(&vcpu->ept_lock);
+		printk(KERN_ERR "ept: failed to lookup EPT entry\n");
+		return ret;
+	}
+
+	flags = __EPTE_READ | __EPTE_TYPE(EPTE_TYPE_UC) |
+		__EPTE_IPAT | __EPTE_PFNMAP;
+	if (make_write)
+		flags |= __EPTE_WRITE;
+	if (vcpu->ept_ad_enabled) {
+		/* premark A/D to avoid extra memory references */
+		flags |= __EPTE_A;
+		if (make_write)
+			flags |= __EPTE_D;
+	}
+
+	if (epte_present(*epte))
+		ept_clear_epte(epte);
+
+	addr = (long)posted_interrupt_desc_region + (gpa - GPA_POSTED_INTR_DESCS);
+	*epte = epte_addr(addr) | flags;
+	spin_unlock(&vcpu->ept_lock);
+
+	return 0;
+}
+
 static int ept_set_pfnmap_epte(struct vmx_vcpu *vcpu, int make_write,
 				unsigned long gpa, unsigned long hva)
 {
@@ -410,6 +450,11 @@ static int ept_set_pfnmap_epte(struct vmx_vcpu *vcpu, int make_write,
 
 	if ((gpa & PAGE_MASK) == GPA_APIC_PAGE) {
 		return ept_map_apic_page(vcpu, make_write, gpa);
+	}
+
+        if ((gpa & PAGE_MASK) >= GPA_POSTED_INTR_DESCS &&
+            (gpa & PAGE_MASK) <  GPA_POSTED_INTR_DESCS + (PAGE_SIZE * NR_CPUS)) {
+		return ept_map_posted_intr_desc_page(vcpu, make_write, gpa);
 	}
 
 	down_read(&mm->mmap_sem);
