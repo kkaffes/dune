@@ -658,6 +658,11 @@ int dune_init(bool map_full)
 		goto err;
 	}
 
+        if ((ret = setup_posted_intr_desc_mapping())) {
+		printf("dune: unable to setup posted interrupt descriptors mappings\n");
+		goto err;
+        }
+
 	// disable signals for now until we have better support
 	for (i = 1; i < 32; i++) {
 		struct sigaction sa;
