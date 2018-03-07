@@ -32,6 +32,8 @@ void *t_start(void *arg) {
 	dune_register_intr_handler(TEST_VECTOR, test_handler);
 	asm volatile("mfence" ::: "memory");
 	*(volatile bool *)arg = true;
+	printf("two: %p\n", (void *)POSTED_INTR_DESCS_BASE);
+        printf("hey: %c\n", *(char *)POSTED_INTR_DESCS_BASE);
 	while (!received_posted_ipi[sched_getcpu()]);
 	return NULL;
 }

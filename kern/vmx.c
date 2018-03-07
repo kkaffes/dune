@@ -80,7 +80,8 @@ void *posted_interrupt_desc_region;
 static unsigned long *msr_bitmap;
 //static struct vmx_vcpu *vcpus_hash[NR_CPUS];
 static void *virtual_apic_pages[NR_CPUS];
-static posted_interrupt_desc *posted_interrupt_descriptors[NR_CPUS];
+//TODO: Replace 256
+static posted_interrupt_desc *posted_interrupt_descriptors[256];
 
 #define NUM_SYSCALLS 312
 
@@ -1616,6 +1617,8 @@ static int vmx_handle_ept_violation(struct vmx_vcpu *vcpu)
 	gva = vmcs_readl(GUEST_LINEAR_ADDRESS);
 	gpa = vmcs_read64(GUEST_PHYSICAL_ADDRESS);
 	vmx_put_cpu(vcpu);
+
+	printk(KERN_INFO "gva: %p, gpa: %p\n", (void *)gva, (void *)gpa);
 	
 	if (exit_qual & (1 << 6)) {
 		printk(KERN_ERR "EPT: GPA 0x%lx exceeds GAW!\n", gpa);
@@ -1838,10 +1841,8 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu, u32 exit_intr_i
                 desc = (gate_desc *)vcpu->idt_base + vector;
                 entry = gate_offset(*desc);
 
-		printk(KERN_INFO "Received external interrupt vector %x on core %d\n", vector, raw_smp_processor_id());
 		if (vector == POSTED_INTR_VECTOR) {
 			//TODO: Is this an error case when posted interrupts are enabled?
-			printk(KERN_INFO "Received posted interrupt vector\n");
 			apic_write_eoi();
 			return;
 		}
@@ -2159,10 +2160,12 @@ __init int vmx_init(void)
 
 	//the descriptors need to be in a contiguous region of memory so that they can easily
 	//be accessed by non-root mode
-	posted_interrupt_desc_region = (void *)__get_free_pages(GFP_KERNEL, NR_CPUS);
-	//memset(posted_interrupt_desc_region, 0x00, PAGE_SIZE * NR_CPUS);
+	//TODO: 2^8 pages are allocated... replace 8 with some constant
+	posted_interrupt_desc_region = (void *)__get_free_pages(GFP_KERNEL, 8);
+	printk(KERN_INFO "Region: %p\n", posted_interrupt_desc_region);
 
 	for_each_possible_cpu(cpu) {
+		printk(KERN_INFO "CPU %d\n", cpu);
 		virtual_apic_pages[cpu] = (void *)__get_free_page(GFP_KERNEL);
 		memset(virtual_apic_pages[cpu], 0x00, PAGE_SIZE);
 		if (!virtual_apic_pages[cpu]) {

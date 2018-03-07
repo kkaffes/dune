@@ -93,7 +93,8 @@ struct dune_trap_config {
 
 /* FIXME: magic page that maps to APIC of the host */
 #define GPA_APIC_PAGE ((1ul<<46)-4096)
-#define GPA_POSTED_INTR_DESCS 1
+#define GPA_POSTED_INTR_DESCS (1ul<<46)
+//(1ul<<46)
 
 #endif /* __ASSEMBLY__ */
 

@@ -90,7 +90,6 @@ static void map_ptr(void *p, int len)
 	unsigned long page_end = PGADDR((char*) p + len);
 	unsigned long l = (page_end - page) + PGSIZE;
 	void *pg = (void*) page;
-
 	dune_vm_map_phys(pgroot, pg, l, (void*) dune_va_to_pa(pg),
 			 PERM_R | PERM_W);
 }
@@ -267,7 +266,8 @@ static int setup_apic_mapping(void)
 static int setup_posted_intr_desc_mapping(void)
 {
 	int i;
-	for (i = 0; i < NR_CPUS; i++) {
+	//TODO: Replace 256
+	for (i = 0; i < 10; i++) {
 		map_ptr((void *) (POSTED_INTR_DESCS_BASE + (i * PAGE_SIZE)), 0);
 	}
 	return 0;

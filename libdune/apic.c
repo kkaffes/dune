@@ -181,8 +181,9 @@ void apic_send_posted_ipi(u8 vector, u32 destination_core) {
     bool error = false;
     u32 destination_apic_id = apic_id_for_cpu(destination_core, &error);
     if (error) return;
-    //apic_send_ipi(POSTED_INTR_VECTOR, destination_apic_id);
-
-    apic_send_ipi(destination_apic_id, 0xF2);
+    printf("APIC BASE: %lx\n", APIC_BASE);
+    printf("POSTED_INTR_DESCS_BASE: %lx\n", POSTED_INTR_DESCS_BASE);
+    //*(char *)POSTED_INTR_DESCS_BASE = 0;
+    apic_send_ipi(destination_apic_id, POSTED_INTR_VECTOR);
     printf("Sent IPI to apic %u\n", destination_apic_id);
 }

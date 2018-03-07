@@ -151,6 +151,8 @@ static unsigned long gpa_to_hva(struct vmx_vcpu *vcpu,
 {
 	uintptr_t phys_end = (1ULL << boot_cpu_data.x86_phys_bits);
 
+	if (raw_smp_processor_id() == 0) { printk(KERN_INFO "HERE, gpa: %lx\n", gpa & PAGE_MASK); }
+
 	/* fake success when translating APIC page */
 	if ((gpa & PAGE_MASK) == GPA_APIC_PAGE) {
 		return 0;
@@ -158,6 +160,7 @@ static unsigned long gpa_to_hva(struct vmx_vcpu *vcpu,
 	/* fake success when translating posted interrupt descriptors pages */
 	if ((gpa & PAGE_MASK) >= GPA_POSTED_INTR_DESCS &&
 	    (gpa & PAGE_MASK) <  GPA_POSTED_INTR_DESCS + (PAGE_SIZE * NR_CPUS)) {
+		printk(KERN_INFO "physical address success!\n");
 		return 0;
 	}
 
@@ -447,7 +450,7 @@ static int ept_set_pfnmap_epte(struct vmx_vcpu *vcpu, int make_write,
 	unsigned long pfn;
 	int ret;
 	int cache_control;
-
+	
 	if ((gpa & PAGE_MASK) == GPA_APIC_PAGE) {
 		return ept_map_apic_page(vcpu, make_write, gpa);
 	}
