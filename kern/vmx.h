@@ -24,6 +24,7 @@ struct vmx_capability {
 };
 
 extern struct vmx_capability vmx_capability;
+extern void *posted_interrupt_desc_region;
 
 #define NR_AUTOLOAD_MSRS 8
 

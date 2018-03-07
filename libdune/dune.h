@@ -183,7 +183,12 @@ extern uintptr_t phys_limit;
 extern uintptr_t mmap_base;
 extern uintptr_t stack_base;
 
+//TODO: Can I get rid of these two constants?
+#define NR_CPUS 100
+#define PAGE_SIZE 4096
+
 #define APIC_BASE 0xfffffffffffff000
+#define POSTED_INTR_DESCS_BASE (APIC_BASE + PAGE_SIZE)
 
 static inline uintptr_t dune_mmap_addr_to_pa(void *ptr)
 {
@@ -201,6 +206,9 @@ static inline uintptr_t dune_va_to_pa(void *ptr)
 {
 	if (PGADDR(ptr) == APIC_BASE)
 		return GPA_APIC_PAGE;
+	if (PGADDR(ptr) >= POSTED_INTR_DESCS_BASE &&
+	    PGADDR(ptr) <  POSTED_INTR_DESCS_BASE + (NR_CPUS * PAGE_SIZE))
+		return GPA_POSTED_INTR_DESCS + (NR_CPUS * PAGE_SIZE);
 	if ((uintptr_t) ptr >= stack_base)
 		return dune_stack_addr_to_pa(ptr);
 	else if ((uintptr_t) ptr >= mmap_base)
