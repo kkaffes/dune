@@ -46,10 +46,22 @@ typedef struct posted_interrupt_desc {
 //these addresses are loaded via a VM function call in a lazy fashion
 static posted_interrupt_desc *posted_interrupt_descriptors[NUM_CORES];
 
+static inline void apic_write(u32 reg, u32 v)
+{
+	volatile u32 *addr = (volatile u32 *)(APIC_BASE + reg);
+	asm volatile("movl %0, %P1" : "=r" (v), "=m" (*addr) : "i" (0), "0" (v), "m" (*addr));
+}
+
+static inline uint32_t apic_read(uint32_t reg)
+{
+	return *((volatile uint32_t *)(APIC_BASE + reg));
+}
+
 uint32_t dune_apic_id() {
-        long long apic_id;
-        rdmsrl(APIC_ID_MSR, apic_id);
-        return (uint32_t)apic_id;
+    uint32_t apic_id = apic_read(0x20);
+    apic_id >>= 24;
+    apic_id &= 0xF;
+    return apic_id;
 }
 
 void setup_apic() {
@@ -75,17 +87,6 @@ void apic_init_posted_desc_entry() {
 	//Implement
 }
 
-static inline void apic_write(u32 reg, u32 v)
-{
-	volatile u32 *addr = (volatile u32 *)(APIC_BASE + reg);
-	asm volatile("movl %0, %P1" : "=r" (v), "=m" (*addr) : "i" (0), "0" (v), "m" (*addr));
-}
-
-static inline uint32_t apic_read(uint32_t reg)
-{
-	return *((volatile uint32_t *)(APIC_BASE + reg));
-}
-
 static inline unsigned int __prepare_ICR(unsigned int shortcut, int vector, unsigned int dest)
 {
 	return shortcut | dest | APIC_DM_FIXED | vector;
@@ -98,6 +99,7 @@ static inline int __prepare_ICR2(unsigned int mask)
 
 static inline void __xapic_wait_icr_idle(void)
 {
+	printf("apic read: %x\n", apic_read(APIC_ICR));
 	while (apic_read(APIC_ICR) & APIC_ICR_BUSY) {
 		asm volatile("pause");
 	}
@@ -150,9 +152,10 @@ test_and_set_bit(unsigned long nr, volatile void *addr)
 }
 
 void apic_send_posted_ipi(u8 vector, u32 destination_core) {
-    posted_interrupt_desc *desc;
+    /*posted_interrupt_desc *desc;
     desc = posted_interrupt_descriptors[destination_core];
     if (!desc) {
+	printf("Error 1\n");
         //the address for the destination core's posted interrupt descriptor
         //is unknown... this is probably because the destination core has not
         //yet called [apic_init_posted_desc_entry]
@@ -161,6 +164,7 @@ void apic_send_posted_ipi(u8 vector, u32 destination_core) {
  
     //first set the posted-interrupt request
     if (test_and_set_bit(vector, (unsigned long *)desc->vectors)) {
+	printf("Error 2\n");
         //bit already set, so the interrupt is already pending (and
         //the outstanding notification bit is 1)
         return;
@@ -168,13 +172,17 @@ void apic_send_posted_ipi(u8 vector, u32 destination_core) {
     
     //set the outstanding notification bit to 1
     if (test_and_set_bit(0, (unsigned long *)desc->extra)) {
+	printf("Error 3\n");
         //bit already set, so there is an interrupt(s) already pending
         return;
     }
-    
+    */
     //now send the posted interrupt vector to the destination
     bool error = false;
     u32 destination_apic_id = apic_id_for_cpu(destination_core, &error);
     if (error) return;
-    apic_send_ipi(POSTED_INTR_VECTOR, destination_apic_id);
+    //apic_send_ipi(POSTED_INTR_VECTOR, destination_apic_id);
+
+    apic_send_ipi(destination_apic_id, 0xF2);
+    printf("Sent IPI to apic %u\n", destination_apic_id);
 }

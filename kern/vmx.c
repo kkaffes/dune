@@ -376,7 +376,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	u32 _vmentry_control = 0;
 
 	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING;
-	opt = PIN_BASED_VIRTUAL_NMIS | PIN_BASED_POSTED_INTR;
+	opt = PIN_BASED_VIRTUAL_NMIS ; // | PIN_BASED_POSTED_INTR;
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_PINBASED_CTLS,
 				&_pin_based_exec_control) < 0)
 		return -EIO;
@@ -1835,9 +1835,11 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu, u32 exit_intr_i
                 vector =  exit_intr_info & INTR_INFO_VECTOR_MASK;
                 desc = (gate_desc *)vcpu->idt_base + vector;
                 entry = gate_offset(*desc);
-	
+
+		printk(KERN_INFO "Received external interrupt vector %x on core %d\n", vector, raw_smp_processor_id());
 		if (vector == POSTED_INTR_VECTOR) {
 			//TODO: Is this an error case when posted interrupts are enabled?
+			printk(KERN_INFO "Received posted interrupt vector\n");
 			apic_write_eoi();
 			return;
 		}
@@ -2181,6 +2183,8 @@ __init int vmx_init(void)
 
 		per_cpu(vmxarea, cpu) = vmxon_buf;
 	}
+
+	printk(KERN_ERR "x2APIC enabled: %d\n", x2apic_enabled());
 
 	atomic_set(&vmx_enable_failed, 0);
 	if (on_each_cpu(vmx_enable, NULL, 1)) {
