@@ -43,8 +43,9 @@ typedef struct posted_interrupt_desc {
     u32 extra[8]; /* outstanding notification indicator and extra space the VMM can use */
 } __attribute__((aligned(64))) posted_interrupt_desc;
 
-//these addresses are loaded via a VM function call in a lazy fashion
-static posted_interrupt_desc *posted_interrupt_descriptors[NUM_CORES];
+static inline void *posted_interrupt_desc_entry_for_core(uint32_t core) {
+	return (void *)(POSTED_INTR_DESCS_BASE + (core * PAGE_SIZE));
+}
 
 static inline void apic_write(u32 reg, u32 v)
 {
@@ -121,46 +122,46 @@ void dune_apic_eoi() {
         wrmsrl(APIC_EOI_MSR, EOI_ACK);
 }
 
-static inline int
-test_and_set_bit(unsigned long nr, volatile void *addr)
+#define LOCK_PREFIX_HERE \
+		".section .smp_locks,\"a\"\n"	\
+		".balign 4\n"			\
+		".long 671f - .\n" /* offset */	\
+		".previous\n"			\
+		"671:"
+
+#define LOCK_PREFIX LOCK_PREFIX_HERE "\n\tlock; "
+
+/*
+ * These have to be done with inline assembly: that way the bit-setting
+ * is guaranteed to be atomic. All bit operations return 0 if the bit
+ * was cleared before the operation and != 0 if it was not.
+ *
+ * bit 0 is the LSB of addr; bit 32 is the LSB of (addr+1).
+ */
+
+#if __GNUC__ < 4 || (__GNUC__ == 4 && __GNUC_MINOR__ < 1)
+/* Technically wrong, but this avoids compilation errors on some gcc
+   versions. */
+#define BITOP_ADDR(x) "=m" (*(volatile long *) (x))
+#else
+#define BITOP_ADDR(x) "+m" (*(volatile long *) (x))
+#endif
+
+#define ADDR				BITOP_ADDR(addr)
+
+static inline int test_and_set_bit(int nr, volatile unsigned long *addr)
 {
-	unsigned long oldbit;
-	unsigned long temp;
-	int *m = ((int *) addr) + (nr >> 5);
+	int oldbit;
 
-	__asm__ __volatile__(
-#ifdef CONFIG_SMP
-	"	mb\n"
-#endif
-	"1:	ldl_l %0,%4\n"
-	"	and %0,%3,%2\n"
-	"	bne %2,2f\n"
-	"	xor %0,%3,%0\n"
-	"	stl_c %0,%1\n"
-	"	beq %0,3f\n"
-	"2:\n"
-#ifdef CONFIG_SMP
-	"	mb\n"
-#endif
-	".subsection 2\n"
-	"3:	br 1b\n"
-	".previous"
-	:"=&r" (temp), "=m" (*m), "=&r" (oldbit)
-	:"Ir" (1UL << (nr & 31)), "m" (*m) : "memory");
+	asm volatile(LOCK_PREFIX "bts %2,%1\n\t"
+		     "sbb %0,%0" : "=r" (oldbit), ADDR : "Ir" (nr) : "memory");
 
-	return oldbit != 0;
+	return oldbit;
 }
 
 void apic_send_posted_ipi(u8 vector, u32 destination_core) {
-    /*posted_interrupt_desc *desc;
-    desc = posted_interrupt_descriptors[destination_core];
-    if (!desc) {
-	printf("Error 1\n");
-        //the address for the destination core's posted interrupt descriptor
-        //is unknown... this is probably because the destination core has not
-        //yet called [apic_init_posted_desc_entry]
-        return;
-    }
+    posted_interrupt_desc *desc;
+    desc = posted_interrupt_desc_entry_for_core(destination_core);
  
     //first set the posted-interrupt request
     if (test_and_set_bit(vector, (unsigned long *)desc->vectors)) {
@@ -176,14 +177,11 @@ void apic_send_posted_ipi(u8 vector, u32 destination_core) {
         //bit already set, so there is an interrupt(s) already pending
         return;
     }
-    */
+    
     //now send the posted interrupt vector to the destination
     bool error = false;
     u32 destination_apic_id = apic_id_for_cpu(destination_core, &error);
     if (error) return;
-    printf("APIC BASE: %lx\n", APIC_BASE);
-    printf("POSTED_INTR_DESCS_BASE: %lx\n", POSTED_INTR_DESCS_BASE);
-    //*(char *)POSTED_INTR_DESCS_BASE = 0;
     apic_send_ipi(destination_apic_id, POSTED_INTR_VECTOR);
     printf("Sent IPI to apic %u\n", destination_apic_id);
 }

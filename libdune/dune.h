@@ -187,7 +187,7 @@ extern uintptr_t stack_base;
 #define PAGE_SIZE 4096
 
 #define APIC_BASE 0xfffffffffffff000
-#define POSTED_INTR_DESCS_BASE 0x7000000000000000
+#define POSTED_INTR_DESCS_BASE (1ul<<45)
 
 static inline uintptr_t dune_mmap_addr_to_pa(void *ptr)
 {
@@ -207,7 +207,6 @@ static inline uintptr_t dune_va_to_pa(void *ptr)
 		return GPA_APIC_PAGE;
 	if (PGADDR(ptr) >= POSTED_INTR_DESCS_BASE &&
 	    PGADDR(ptr) <  POSTED_INTR_DESCS_BASE + (256 * PAGE_SIZE)) {
-		printf("Map %p to %p\n", ptr, (void *)(GPA_POSTED_INTR_DESCS + (PGADDR(ptr) - POSTED_INTR_DESCS_BASE)));
 		return GPA_POSTED_INTR_DESCS + (PGADDR(ptr) - POSTED_INTR_DESCS_BASE);
 	}
 	if ((uintptr_t) ptr >= stack_base)

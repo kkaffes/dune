@@ -151,16 +151,13 @@ static unsigned long gpa_to_hva(struct vmx_vcpu *vcpu,
 {
 	uintptr_t phys_end = (1ULL << boot_cpu_data.x86_phys_bits);
 
-	if (raw_smp_processor_id() == 0) { printk(KERN_INFO "HERE, gpa: %lx\n", gpa & PAGE_MASK); }
-
 	/* fake success when translating APIC page */
 	if ((gpa & PAGE_MASK) == GPA_APIC_PAGE) {
 		return 0;
 	}
 	/* fake success when translating posted interrupt descriptors pages */
 	if ((gpa & PAGE_MASK) >= GPA_POSTED_INTR_DESCS &&
-	    (gpa & PAGE_MASK) <  GPA_POSTED_INTR_DESCS + (PAGE_SIZE * NR_CPUS)) {
-		printk(KERN_INFO "physical address success!\n");
+	    (gpa & PAGE_MASK) <  GPA_POSTED_INTR_DESCS + (PAGE_SIZE * 256)) {
 		return 0;
 	}
 
@@ -434,7 +431,7 @@ static int ept_map_posted_intr_desc_page(struct vmx_vcpu *vcpu, int make_write, 
 	if (epte_present(*epte))
 		ept_clear_epte(epte);
 
-	addr = (long)posted_interrupt_desc_region + (gpa - GPA_POSTED_INTR_DESCS);
+	addr = (long)__pa(posted_interrupt_desc_region) + (gpa - GPA_POSTED_INTR_DESCS);
 	*epte = epte_addr(addr) | flags;
 	spin_unlock(&vcpu->ept_lock);
 
