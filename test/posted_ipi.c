@@ -8,7 +8,7 @@
 #include "libdune/dune.h"
 #include "libdune/cpu-x86.h"
 
-#define NUM_THREADS 1
+#define NUM_THREADS 10
 #define TEST_VECTOR 0xF2
 
 volatile bool t2_ready = false;

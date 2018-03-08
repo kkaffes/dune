@@ -10,10 +10,10 @@
 #include "libdune/dune.h"
 #include "libdune/cpu-x86.h"
 
-#define THREAD_2_CORE 10
+#define THREAD_2_CORE 0
 #define TEST_VECTOR 0xf2
 
-#define NUM_ITERATIONS 1000000
+#define NUM_ITERATIONS 10000
 
 volatile bool t2_ready = false;
 volatile bool wait = true;
@@ -70,7 +70,8 @@ int main(int argc, char *argv[])
 
 	int i;
 	for (i = 0; i < NUM_ITERATIONS; i++) {
-		dune_apic_send_ipi(TEST_VECTOR, apic_id_for_cpu(THREAD_2_CORE, NULL));
+		apic_send_posted_ipi(TEST_VECTOR, THREAD_2_CORE);
+		//dune_apic_send_ipi(TEST_VECTOR, apic_id_for_cpu(THREAD_2_CORE, NULL));
 		while (wait);
 		wait = true;
 	}

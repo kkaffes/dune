@@ -45,7 +45,8 @@ void *t2_start(void *arg) {
 		while (wait2 && !done);
 		if (done) break;
 		wait2 = true;
-		dune_apic_send_ipi(TEST_VECTOR, apic_id_for_cpu(THREAD_1_CORE, NULL));
+		apic_send_posted_ipi(TEST_VECTOR, THREAD_1_CORE);
+		//dune_apic_send_ipi(TEST_VECTOR, apic_id_for_cpu(THREAD_1_CORE, NULL));
 	};
 	return NULL;
 }
@@ -86,7 +87,8 @@ int main(int argc, char *argv[])
 
 	int i;
 	for (i = 0; i < NUM_ITERATIONS; i++) {
-		dune_apic_send_ipi(TEST_VECTOR, apic_id_for_cpu(THREAD_2_CORE, NULL));
+		apic_send_posted_ipi(TEST_VECTOR, THREAD_2_CORE);
+		//dune_apic_send_ipi(TEST_VECTOR, apic_id_for_cpu(THREAD_2_CORE, NULL));
 		while (wait1);
 		wait1 = true;
 	}

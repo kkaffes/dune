@@ -2160,10 +2160,8 @@ __init int vmx_init(void)
 	//be accessed by non-root mode
 	//TODO: 2^8 pages are allocated... replace 8 with some constant
 	posted_interrupt_desc_region = (void *)__get_free_pages(GFP_KERNEL, 8);
-	printk(KERN_INFO "Region: %p\n", posted_interrupt_desc_region);
 
 	for_each_possible_cpu(cpu) {
-		printk(KERN_INFO "CPU %d\n", cpu);
 		virtual_apic_pages[cpu] = (void *)__get_free_page(GFP_KERNEL);
 		memset(virtual_apic_pages[cpu], 0x00, PAGE_SIZE);
 		if (!virtual_apic_pages[cpu]) {
@@ -2191,8 +2189,6 @@ __init int vmx_init(void)
 
 		per_cpu(vmxarea, cpu) = vmxon_buf;
 	}
-
-	printk(KERN_ERR "x2APIC enabled: %d\n", x2apic_enabled());
 
 	atomic_set(&vmx_enable_failed, 0);
 	if (on_each_cpu(vmx_enable, NULL, 1)) {

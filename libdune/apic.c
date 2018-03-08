@@ -100,10 +100,7 @@ static inline int __prepare_ICR2(unsigned int mask)
 
 static inline void __xapic_wait_icr_idle(void)
 {
-	printf("apic read: %x\n", apic_read(APIC_ICR));
-	while (apic_read(APIC_ICR) & APIC_ICR_BUSY) {
-		asm volatile("pause");
-	}
+	while (apic_read(APIC_ICR) & APIC_ICR_BUSY);
 }
 
 static inline void __default_send_IPI_dest_field(unsigned int mask, int vector, unsigned int dest)
@@ -165,7 +162,6 @@ void apic_send_posted_ipi(u8 vector, u32 destination_core) {
  
     //first set the posted-interrupt request
     if (test_and_set_bit(vector, (unsigned long *)desc->vectors)) {
-	printf("Error 2\n");
         //bit already set, so the interrupt is already pending (and
         //the outstanding notification bit is 1)
         return;
@@ -173,7 +169,6 @@ void apic_send_posted_ipi(u8 vector, u32 destination_core) {
     
     //set the outstanding notification bit to 1
     if (test_and_set_bit(0, (unsigned long *)desc->extra)) {
-	printf("Error 3\n");
         //bit already set, so there is an interrupt(s) already pending
         return;
     }
@@ -183,5 +178,4 @@ void apic_send_posted_ipi(u8 vector, u32 destination_core) {
     u32 destination_apic_id = apic_id_for_cpu(destination_core, &error);
     if (error) return;
     apic_send_ipi(destination_apic_id, POSTED_INTR_VECTOR);
-    printf("Sent IPI to apic %u\n", destination_apic_id);
 }
