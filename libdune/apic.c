@@ -77,15 +77,11 @@ void apic_init_rt_entry() {
 }
 
 uint32_t apic_id_for_cpu(uint32_t cpu, bool *error) {
-        if (cpu >= NUM_CORES) {
+        if (cpu >= NUM_CORES || apic_routing[cpu] == -1) {
             if (error) *error = true;
             return 0;
         }
         return apic_routing[cpu];
-}
-
-void apic_init_posted_desc_entry() {
-	//Implement
 }
 
 static inline unsigned int __prepare_ICR(unsigned int shortcut, int vector, unsigned int dest)

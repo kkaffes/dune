@@ -417,20 +417,8 @@ static int ept_map_posted_intr_desc_page(struct vmx_vcpu *vcpu, int make_write, 
 		return ret;
 	}
 
-	flags = __EPTE_READ | __EPTE_TYPE(EPTE_TYPE_UC) |
-		__EPTE_IPAT | __EPTE_PFNMAP;
-	if (make_write)
-		flags |= __EPTE_WRITE;
-	if (vcpu->ept_ad_enabled) {
-		/* premark A/D to avoid extra memory references */
-		flags |= __EPTE_A;
-		if (make_write)
-			flags |= __EPTE_D;
-	}
-
-	if (epte_present(*epte))
-		ept_clear_epte(epte);
-
+	flags = __EPTE_READ | __EPTE_WRITE | __EPTE_TYPE(EPTE_TYPE_WB);
+	
 	addr = (long)__pa(posted_interrupt_desc_region) + (gpa - GPA_POSTED_INTR_DESCS);
 	*epte = epte_addr(addr) | flags;
 	spin_unlock(&vcpu->ept_lock);

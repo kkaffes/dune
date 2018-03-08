@@ -118,8 +118,11 @@ extern void dune_passthrough_syscall(struct dune_tf *tf);
 
 // x2APIC
 
+void setup_apic();
+void apic_init_rt_entry();
+
 uint32_t dune_apic_id();
-extern uint32_t apic_id_for_cpu(uint32_t cpu, bool *error);
+//extern uint32_t apic_id_for_cpu(uint32_t cpu, bool *error);
 void apic_send_posted_ipi(uint8_t vector, uint32_t destination_core);
 extern void dune_apic_eoi(void);
 

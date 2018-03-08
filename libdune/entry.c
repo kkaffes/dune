@@ -267,7 +267,7 @@ static int setup_posted_intr_desc_mapping(void)
 {
 	int i;
 	//TODO: Replace 256
-	for (i = 0; i < 10; i++) {
+	for (i = 0; i < 256; i++) {
 		map_ptr((void *) (POSTED_INTR_DESCS_BASE + (i * PAGE_SIZE)), 0);
 	}
 	return 0;

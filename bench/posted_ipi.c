@@ -30,7 +30,7 @@ void *t2_start(void *arg) {
 		printf("posted_ipi: failed to enter dune in thread 2\n");
 		return NULL;
 	}
-        
+        apic_init_rt_entry();
 	dune_register_intr_handler(TEST_VECTOR, test_handler);
 	asm volatile("mfence" ::: "memory");
 	t2_ready = true;
@@ -51,6 +51,9 @@ int main(int argc, char *argv[])
 	}
 	printf("posted_ipi: now printing from dune mode\n");
 
+	setup_apic();
+        apic_init_rt_entry();	
+
 	pthread_t t2;
         pthread_attr_t attr;
         cpu_set_t cpus;
@@ -62,7 +65,7 @@ int main(int argc, char *argv[])
 
 	while (!t2_ready);
 	asm volatile("mfence" ::: "memory");
-	printf("posted_ipi: about to send posted IPI\n");
+	printf("posted_ipi: about to send posted IPI on core %d\n", sched_getcpu());
 
 	unsigned long rdtsc_overhead = measure_tsc_overhead();
 	synch_tsc();
@@ -71,7 +74,6 @@ int main(int argc, char *argv[])
 	int i;
 	for (i = 0; i < NUM_ITERATIONS; i++) {
 		apic_send_posted_ipi(TEST_VECTOR, THREAD_2_CORE);
-		//dune_apic_send_ipi(TEST_VECTOR, apic_id_for_cpu(THREAD_2_CORE, NULL));
 		while (wait);
 		wait = true;
 	}

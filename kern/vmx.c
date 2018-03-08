@@ -379,7 +379,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	u32 _vmentry_control = 0;
 
 	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING;
-	opt = PIN_BASED_VIRTUAL_NMIS ; // | PIN_BASED_POSTED_INTR;
+	opt = PIN_BASED_VIRTUAL_NMIS | PIN_BASED_POSTED_INTR;
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_PINBASED_CTLS,
 				&_pin_based_exec_control) < 0)
 		return -EIO;
@@ -1617,6 +1617,9 @@ static int vmx_handle_ept_violation(struct vmx_vcpu *vcpu)
 	gva = vmcs_readl(GUEST_LINEAR_ADDRESS);
 	gpa = vmcs_read64(GUEST_PHYSICAL_ADDRESS);
 	vmx_put_cpu(vcpu);
+
+	//static int counter = 0;
+	//printk(KERN_INFO "EPT violation %d (gva = %p, gpa = %p)\n", counter++, (void *)gva, (void *)gpa);
 	
 	if (exit_qual & (1 << 6)) {
 		printk(KERN_ERR "EPT: GPA 0x%lx exceeds GAW!\n", gpa);
@@ -1983,6 +1986,8 @@ int vmx_launch(struct dune_config *conf, int64_t *ret_code)
 		}
 
 		vmx_put_cpu(vcpu);
+
+		//printk(KERN_INFO "Exit reason %d on core %d\n", ret, raw_smp_processor_id());
 
 		if (ret == EXIT_REASON_VMCALL)
 			vmx_handle_syscall(vcpu);
