@@ -10,10 +10,10 @@
 #include "libdune/dune.h"
 #include "libdune/cpu-x86.h"
 
-#define THREAD_2_CORE 0
+#define THREAD_2_CORE 47
 #define TEST_VECTOR 0xf2
 
-#define NUM_ITERATIONS 10000
+#define NUM_ITERATIONS 1000000
 
 volatile bool t2_ready = false;
 volatile bool wait = true;

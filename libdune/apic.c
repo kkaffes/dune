@@ -61,7 +61,7 @@ static inline uint32_t apic_read(uint32_t reg)
 uint32_t dune_apic_id() {
     uint32_t apic_id = apic_read(0x20);
     apic_id >>= 24;
-    apic_id &= 0xF;
+    apic_id &= 0xFF;
     return apic_id;
 }
 
