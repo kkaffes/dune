@@ -377,7 +377,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	u32 _vmentry_control = 0;
 
 	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING;
-	opt = PIN_BASED_VIRTUAL_NMIS | PIN_BASED_POSTED_INTR;
+	opt = PIN_BASED_VIRTUAL_NMIS ; // | PIN_BASED_POSTED_INTR;
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_PINBASED_CTLS,
 				&_pin_based_exec_control) < 0)
 		return -EIO;
@@ -2106,6 +2106,15 @@ static void vmx_free_vmxon_areas(void)
 	}
 }
 
+static inline int get_log2(int32_t input) {
+	int order;
+	for (order = 0; order < 32; order++) {
+		int compare = 1 << order;
+		if (compare >= input) return order;
+	}
+	return -1;
+}
+
 /**
  * vmx_init - the main initialization routine for this driver
  */
@@ -2164,8 +2173,7 @@ __init int vmx_init(void)
         
 	//the descriptors need to be in a contiguous region of memory so that they can easily
 	//be accessed by non-root mode
-	//TODO: 2^8 pages are allocated... replace 8 with some constant
-	posted_interrupt_desc_region = (void *)__get_free_pages(GFP_KERNEL, 8);
+	posted_interrupt_desc_region = (void *)__get_free_pages(GFP_KERNEL, get_log2(num_online_cpus()));
 
 	for_each_possible_cpu(cpu) {
 		virtual_apic_pages[cpu] = (void *)__get_free_page(GFP_KERNEL);
