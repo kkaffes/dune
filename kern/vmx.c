@@ -78,10 +78,8 @@ typedef struct posted_interrupt_desc {
 void *posted_interrupt_desc_region;
 
 static unsigned long *msr_bitmap;
-//static struct vmx_vcpu *vcpus_hash[NR_CPUS];
-static void *virtual_apic_pages[NR_CPUS];
-//TODO: Replace 256
-static posted_interrupt_desc *posted_interrupt_descriptors[256];
+static void **virtual_apic_pages;
+static posted_interrupt_desc **posted_interrupt_descriptors;
 
 #define NUM_SYSCALLS 312
 
@@ -2161,6 +2159,9 @@ __init int vmx_init(void)
 
 	apic_init();
 
+        virtual_apic_pages = kmalloc(sizeof(void *) * num_online_cpus(), GFP_KERNEL);
+        posted_interrupt_descriptors = kmalloc(sizeof(*posted_interrupt_descriptors) * num_online_cpus(), GFP_KERNEL);
+        
 	//the descriptors need to be in a contiguous region of memory so that they can easily
 	//be accessed by non-root mode
 	//TODO: 2^8 pages are allocated... replace 8 with some constant
