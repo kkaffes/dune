@@ -1,5 +1,8 @@
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
+#include <sched.h>
 
 #include "libdune/dune.h"
 #include "libdune/cpu-x86.h"
