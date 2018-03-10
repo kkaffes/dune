@@ -686,7 +686,7 @@ int dune_init(bool map_full)
 
 	setup_idt();
 
-	setup_apic();
+	dune_setup_apic();
 
 	return 0;
 

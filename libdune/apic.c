@@ -7,6 +7,7 @@
 
 #include <malloc.h>
 #include <sched.h>
+#include <sys/sysinfo.h>
 
 #include "dune.h"
 #include "cpu-x86.h"
@@ -153,7 +154,7 @@ static inline int test_and_set_bit(int nr, volatile unsigned long *addr)
 	return oldbit;
 }
 
-void apic_send_posted_ipi(u8 vector, u32 destination_core) {
+void dune_apic_send_posted_ipi(u8 vector, u32 destination_core) {
     posted_interrupt_desc *desc;
     desc = posted_interrupt_desc_entry_for_core(destination_core);
  
