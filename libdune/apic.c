@@ -35,8 +35,7 @@ typedef uint32_t u32;
 #define APIC_ICR_BUSY 0x01000
 #define SET_APIC_DEST_FIELD(x) ((x) << 24)
 
-//TODO: Get highest APIC ID in system
-static int apic_routing[NUM_CORES];
+static int *apic_routing;
 
 typedef struct posted_interrupt_desc {
     u32 vectors[8]; /* posted interrupt vectors */
@@ -65,18 +64,20 @@ uint32_t dune_apic_id() {
     return apic_id;
 }
 
-void setup_apic() {
-        memset(apic_routing, -1, sizeof(int) * NUM_CORES);
+void dune_setup_apic() {
+        size_t size = sizeof(int) * get_nprocs();
+        apic_routing = malloc(size);
+        memset(apic_routing, -1, size);
         asm("mfence" ::: "memory");
 }
 
-void apic_init_rt_entry() {
+void dune_apic_init_rt_entry() {
         int core_id = sched_getcpu();
         apic_routing[core_id] = dune_apic_id();
         asm("mfence" ::: "memory");
 }
 
-uint32_t apic_id_for_cpu(uint32_t cpu, bool *error) {
+uint32_t dune_apic_id_for_cpu(uint32_t cpu, bool *error) {
         if (cpu >= NUM_CORES || apic_routing[cpu] == -1) {
             if (error) *error = true;
             return 0;
@@ -171,7 +172,7 @@ void apic_send_posted_ipi(u8 vector, u32 destination_core) {
     
     //now send the posted interrupt vector to the destination
     bool error = false;
-    u32 destination_apic_id = apic_id_for_cpu(destination_core, &error);
+    u32 destination_apic_id = dune_apic_id_for_cpu(destination_core, &error);
     if (error) return;
     apic_send_ipi(destination_apic_id, POSTED_INTR_VECTOR);
 }

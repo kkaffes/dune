@@ -27,8 +27,6 @@ void *t_start(void *arg) {
 		return NULL;
 	}
 	printf("Thread running on core %d\n", sched_getcpu());
-	printf("Thread %d has APIC ID %d\n", sched_getcpu(), dune_apic_id());
-	apic_init_rt_entry();
 	dune_register_intr_handler(TEST_VECTOR, test_handler);
 	asm volatile("mfence" ::: "memory");
 	*(volatile bool *)arg = true;
@@ -48,9 +46,6 @@ int main(int argc, char *argv[])
 		return ret;
 	}
 	printf("posted_ipi: now printing from dune mode on core %d\n", sched_getcpu());
-
-	setup_apic();
-	apic_init_rt_entry();	
 
 	pthread_t pthreads[NUM_THREADS];
 	volatile bool ready[NUM_THREADS];
@@ -72,7 +67,7 @@ int main(int argc, char *argv[])
 	
 	printf("posted_ipi: about to send posted IPIs to %d cores\n", NUM_THREADS);
 	for (i = 0; i < NUM_THREADS; i++) {
-		apic_send_posted_ipi(TEST_VECTOR, i);
+		dune_apic_send_posted_ipi(TEST_VECTOR, i);
 	}
 
 	for (i = 0; i < NUM_THREADS; i++) {

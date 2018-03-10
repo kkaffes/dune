@@ -116,14 +116,11 @@ extern void dune_ret_from_user(int ret)  __attribute__ ((noreturn));
 extern void dune_dump_trap_frame(struct dune_tf *tf);
 extern void dune_passthrough_syscall(struct dune_tf *tf);
 
-// x2APIC
+// APIC
 
-void setup_apic();
-void apic_init_rt_entry();
-
-uint32_t dune_apic_id();
-//extern uint32_t apic_id_for_cpu(uint32_t cpu, bool *error);
-void apic_send_posted_ipi(uint8_t vector, uint32_t destination_core);
+extern void dune_setup_apic(void);
+extern void dune_apic_init_rt_entry(void);
+extern void dune_apic_send_posted_ipi(uint8_t vector, uint32_t destination_core);
 extern void dune_apic_eoi(void);
 
 // page allocation
