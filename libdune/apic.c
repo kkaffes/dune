@@ -1,10 +1,5 @@
 #define _GNU_SOURCE
 
-//#include <linux/mm.h>
-//#include <asm/ipi.h>
-
-#define _GNU_SOURCE
-
 #include <malloc.h>
 #include <sched.h>
 #include <sys/sysinfo.h>
