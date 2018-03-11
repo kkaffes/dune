@@ -2120,7 +2120,7 @@ static inline int get_log2(int32_t input) {
  */
 __init int vmx_init(void)
 {
-	int r, cpu;
+	int r, cpu, order;
 	
 	if (!cpu_has_vmx()) {
 		printk(KERN_ERR "vmx: CPU does not support VT-x\n");
@@ -2173,7 +2173,9 @@ __init int vmx_init(void)
         
 	//the descriptors need to be in a contiguous region of memory so that they can easily
 	//be accessed by non-root mode
-	posted_interrupt_desc_region = (void *)__get_free_pages(GFP_KERNEL, get_log2(num_online_cpus()));
+        order = get_log2(num_online_cpus());
+        if (order == -1) return -ENOMEM;
+	posted_interrupt_desc_region = (void *)__get_free_pages(GFP_KERNEL, order);
 
 	for_each_possible_cpu(cpu) {
 		virtual_apic_pages[cpu] = (void *)__get_free_page(GFP_KERNEL);
