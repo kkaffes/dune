@@ -377,7 +377,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	u32 _vmentry_control = 0;
 
 	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING;
-	opt = PIN_BASED_VIRTUAL_NMIS ; // | PIN_BASED_POSTED_INTR;
+	opt = PIN_BASED_VIRTUAL_NMIS | PIN_BASED_POSTED_INTR;
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_PINBASED_CTLS,
 				&_pin_based_exec_control) < 0)
 		return -EIO;
