@@ -187,7 +187,7 @@ extern uintptr_t stack_base;
 #define PAGE_SIZE 4096
 
 #define APIC_BASE 0xfffffffffffff000
-#define POSTED_INTR_DESCS_BASE (1ul<<44)
+#define POSTED_INTR_DESCS_BASE (1ul<<45)
 
 static inline uintptr_t dune_mmap_addr_to_pa(void *ptr)
 {
