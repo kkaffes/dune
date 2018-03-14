@@ -484,6 +484,7 @@ static int do_dune_enter(struct dune_percpu *percpu)
 		dune_die();
 	}
 
+        printf("AFTER DUNE BOOT AND BEFORE DUNE_APIC_INIT_RT_ENTRY\n");
 	dune_apic_init_rt_entry();
 
 	return 0;
@@ -652,6 +653,7 @@ int dune_init(bool map_full)
 		goto err;
 	}
 
+        printf("Setting up APIC mapping\n");
 	if ((ret = setup_apic_mapping())) {
 		printf("dune: unable to setup APIC\n");
 		goto err;

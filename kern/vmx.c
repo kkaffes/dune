@@ -1828,7 +1828,6 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu, u32 exit_intr_i
         if ((exit_intr_info & (INTR_INFO_VALID_MASK | INTR_INFO_INTR_TYPE_MASK))
                         == (INTR_INFO_VALID_MASK | INTR_TYPE_EXT_INTR)) {
 
-
                 unsigned int vector;
                 unsigned long entry;
                 gate_desc *desc;
@@ -1839,6 +1838,8 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu, u32 exit_intr_i
                 vector =  exit_intr_info & INTR_INFO_VECTOR_MASK;
                 desc = (gate_desc *)vcpu->idt_base + vector;
                 entry = gate_offset(*desc);
+
+                printk(KERN_INFO "Received interrupt %u on core %d\n", vector, raw_smp_processor_id());
 
 		if (vector == POSTED_INTR_VECTOR) {
 			//TODO: Is this an error case when posted interrupts are enabled?
