@@ -65,16 +65,13 @@ void dune_setup_apic() {
         size_t size = sizeof(int) * get_nprocs();
         apic_routing = malloc(size);
         memset(apic_routing, -1, size);
-        printf("posted ipi: setup apic\n");
         asm("mfence" ::: "memory");
 }
 
 void dune_apic_init_rt_entry() {
         unsigned int core_id, numa_node;
         syscall(SYS_getcpu, &core_id, &numa_node, NULL);
-        printf("posted ipi: initializing APIC routing table entry on core %d\n", core_id);
         apic_routing[core_id] = dune_apic_id();
-        printf("posted ipi: apic id for core %d is %d\n", core_id, dune_apic_id());
         asm("mfence" ::: "memory");
 }
 
@@ -155,11 +152,9 @@ static inline int test_and_set_bit(int nr, volatile unsigned long *addr)
 }
 
 void dune_apic_send_posted_ipi(u8 vector, u32 destination_core) {
-    printf("posted ipi: start\n");
     posted_interrupt_desc *desc;
     desc = posted_interrupt_desc_entry_for_core(destination_core);
 
-    printf("posted ipi: 1 (desc is %p)\n", desc);
 
     //first set the posted-interrupt request
     if (test_and_set_bit(vector, (unsigned long *)desc->vectors)) {
@@ -168,20 +163,15 @@ void dune_apic_send_posted_ipi(u8 vector, u32 destination_core) {
         return;
     }
     
-    printf("posted ipi: 2\n");
     //set the outstanding notification bit to 1
     if (test_and_set_bit(0, (unsigned long *)desc->extra)) {
         //bit already set, so there is an interrupt(s) already pending
         return;
     }
     
-    printf("posted ipi: 3\n");
     //now send the posted interrupt vector to the destination
     bool error = false;
     u32 destination_apic_id = dune_apic_id_for_cpu(destination_core, &error);
     if (error) return;
-    printf("destination_apic_id (on core %u): %d\n", destination_core, destination_apic_id);
-    printf("posted ipi: 4\n");
     apic_send_ipi(destination_apic_id, POSTED_INTR_VECTOR);
-    printf("posted ipi: 5\n");
 }

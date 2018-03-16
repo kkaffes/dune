@@ -1839,8 +1839,6 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu, u32 exit_intr_i
                 desc = (gate_desc *)vcpu->idt_base + vector;
                 entry = gate_offset(*desc);
 
-                printk(KERN_INFO "Received interrupt %u on core %d\n", vector, raw_smp_processor_id());
-
 		if (vector == POSTED_INTR_VECTOR) {
 			//TODO: Is this an error case when posted interrupts are enabled?
 			apic_write_eoi();
