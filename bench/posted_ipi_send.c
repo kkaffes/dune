@@ -77,17 +77,19 @@ int main(int argc, char *argv[])
 
 	unsigned long rdtsc_overhead = measure_tsc_overhead();
 	synch_tsc();
-	unsigned long start_tick = rdtscll();
 
+        unsigned long total = 0;
 	int i;
 	for (i = 0; i < NUM_ITERATIONS; i++) {
+	        unsigned long start_tick = rdtscll();
 		dune_apic_send_posted_ipi(TEST_VECTOR, THREAD_2_CORE);
+	        unsigned long end_tick = rdtscllp();
+                total += end_tick - start_tick - rdtsc_overhead;
 		while (wait);
 		wait = true;
 	}
 
-	unsigned long end_tick = rdtscllp();
-	unsigned long latency = (end_tick - start_tick - rdtsc_overhead) / NUM_ITERATIONS;
+	unsigned long latency = total / NUM_ITERATIONS;
 	printf("Latency: %ld cycles.\n", latency);
 
 	done = true;
