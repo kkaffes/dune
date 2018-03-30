@@ -1884,23 +1884,33 @@ static void vmx_handle_queued_interrupts(struct vmx_vcpu *vcpu)
 {
 	//TODO: Does this have synchronization issues?
 	struct posted_interrupt_desc *desc = posted_interrupt_descriptors[raw_smp_processor_id()];
-	if (test_and_clear_bit(0, (unsigned long *)desc->extra)) {
+        u64 outstanding = __atomic_exchange_n((u64 *)desc->extra, 0x0, 0);
+        if (get_bit(outstanding, 0)) {
 		//there is a pending interrupt(s)
+                //copy bits 0-255 into a local buffer
+                u64 vectors[4];
+                long i, j;
 		u16 guest_interrupt_status = vmcs_read16(GUEST_INTR_STATUS);
 		u8 rvi = guest_interrupt_status & 0xFF;
-		long i;
-		for (i = 0; i < 256; i++) {
-			if (test_and_clear_bit(i, (unsigned long *)desc->vectors)) {
-				//set the corresponding bit in the vIRR
-				void *vapic_page = __va(vmcs_read64(VIRTUAL_APIC_PAGE_ADDR));
-				u32 *to_set = (u32 *)((char *)vapic_page + (0x200 | ((i & 0xE0) >> 1)));
-				//set the bit at position (i & 0x1F)
-				u32 mask = 1 << (i & 0x1F);
-				*to_set |= mask;
+                for (i = 0; i < 4; i++) {
+                    vectors[i] = __atomic_exchange_n((u64 *)desc->vectors + i, 0x0, 0);
+                }
+		for (i = 0; i < 4; i++) {
+                        if (vectors[i] == 0) continue;
+                        for (j = 0; j < 64; j++) {
+                                if (get_bit(vectors[i], j)) {
+                                        long vector = (i * 64) + j;
+				        //set the corresponding bit in the vIRR
+				        void *vapic_page = __va(vmcs_read64(VIRTUAL_APIC_PAGE_ADDR));
+				        u32 *to_set = (u32 *)((char *)vapic_page + (0x200 | ((vector & 0xE0) >> 1)));
+				        //set the bit at position (vector & 0x1F)
+				        u32 mask = 1 << (vector & 0x1F);
+				        *to_set |= mask;
 
-				//update the value to be written to RVI
-				rvi = rvi > i ? rvi : i;
-			}
+				        //update the value to be written to RVI
+				        rvi = rvi > vector ? rvi : vector;
+			        }
+                        }
 		}
                 //set RVI
 		guest_interrupt_status |= (u16)rvi;
