@@ -2,7 +2,7 @@ CC	:= gcc
 CFLAGS	:= -Wall -g -MD -O3 -I../
 LDFLAGS := -ldune -lpthread
 
-bench_files := bench_dune bench_dune_ring bench_linux posted_ipi posted_ipi_send posted_ipi_ping_pong
+bench_files := bench_dune bench_dune_ring bench_linux posted_ipi posted_ipi_send posted_ipi_receive posted_ipi_ping_pong
 
 all: $(bench_files)
 
@@ -19,6 +19,9 @@ posted_ipi: posted_ipi.o ../libdune/libdune.a
 	  $(CC) $(CFLAGS) -static $(<) -L../libdune $(LDFLAGS) -o $(@)
 
 posted_ipi_send: posted_ipi_send.o ../libdune/libdune.a
+	  $(CC) $(CFLAGS) -static $(<) -L../libdune $(LDFLAGS) -o $(@)
+
+posted_ipi_receive: posted_ipi_receive.o ../libdune/libdune.a
 	  $(CC) $(CFLAGS) -static $(<) -L../libdune $(LDFLAGS) -o $(@)
 
 posted_ipi_ping_pong: posted_ipi_ping_pong.o ../libdune/libdune.a
