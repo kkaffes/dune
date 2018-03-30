@@ -10,8 +10,8 @@
 #include "libdune/dune.h"
 #include "libdune/cpu-x86.h"
 
-#define THREAD_CORE 10
-#define THREAD_2_CORE 20
+#define THREAD_CORE 2
+#define THREAD_2_CORE 3
 #define TEST_VECTOR 0xf2
 
 #define NUM_ITERATIONS 1000000
@@ -19,8 +19,13 @@
 volatile bool t2_ready = false;
 volatile bool wait = true;
 volatile bool done = false;
+volatile unsigned long start = 0;
+volatile unsigned long total = 0;
+volatile unsigned long rdtsc_overhead = 0;
 
 static void test_handler(struct dune_tf *tf) {
+        unsigned long end = rdtscllp();
+        total += end - start - rdtsc_overhead;
 	dune_apic_eoi();
 	wait = false;
 }
@@ -33,8 +38,13 @@ void *t2_start(void *arg) {
 	}
 	dune_register_intr_handler(TEST_VECTOR, test_handler);
 	asm volatile("mfence" ::: "memory");
+	rdtsc_overhead = measure_tsc_overhead();
+	synch_tsc();
+        start = rdtscll();
 	t2_ready = true;
-	while (!done);
+	while (!done) {
+                start = rdtscll();
+        }
 	return NULL;
 }
 
@@ -75,10 +85,6 @@ int main(int argc, char *argv[])
 	asm volatile("mfence" ::: "memory");
 	printf("posted_ipi: about to send posted IPI on core %d\n", sched_getcpu());
 
-	unsigned long rdtsc_overhead = measure_tsc_overhead();
-	synch_tsc();
-	unsigned long start_tick = rdtscll();
-
 	int i;
 	for (i = 0; i < NUM_ITERATIONS; i++) {
 		dune_apic_send_posted_ipi(TEST_VECTOR, THREAD_2_CORE);
@@ -86,8 +92,7 @@ int main(int argc, char *argv[])
 		wait = true;
 	}
 
-	unsigned long end_tick = rdtscllp();
-	unsigned long latency = (end_tick - start_tick - rdtsc_overhead) / NUM_ITERATIONS;
+	unsigned long latency = total / NUM_ITERATIONS;
 	printf("Latency: %ld cycles.\n", latency);
 
 	done = true;
