@@ -1870,6 +1870,10 @@ static void vmx_handle_external_interrupt(struct vmx_vcpu *vcpu, u32 exit_intr_i
 }
 STACK_FRAME_NON_STANDARD(vmx_handle_external_interrupt);
 
+static inline char get_bit(u64 data, size_t pos) {
+        return (data & ((u64)1 << pos)) >> pos;
+}
+
 /* vmx_handle_queued_interrupts - sometimes a posted interrupt is sent to a core
  * that is not currently in VMX non-root mode. In this case, the interrupt
  * is still pending in the posted interrupt descriptor, but it needs to be
