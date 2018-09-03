@@ -202,11 +202,7 @@ static inline void ept_sync_context(u64 eptp)
 
 static inline void ept_sync_individual_addr(u64 eptp, gpa_t gpa)
 {
-	if (cpu_has_vmx_invept_individual_addr())
-		__invept(VMX_EPT_EXTENT_INDIVIDUAL_ADDR,
-				eptp, gpa);
-	else
-		ept_sync_context(eptp);
+	ept_sync_context(eptp);
 }
 
 static inline void __vmxon(u64 addr)
