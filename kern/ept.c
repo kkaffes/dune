@@ -441,7 +441,7 @@ static int ept_set_pfnmap_epte(struct vmx_vcpu *vcpu, int make_write,
 	}
 
         if ((gpa & PAGE_MASK) >= GPA_POSTED_INTR_DESCS &&
-            (gpa & PAGE_MASK) <  GPA_POSTED_INTR_DESCS + (PAGE_SIZE * num_online_cpus())) {
+            (gpa & PAGE_MASK) <  GPA_POSTED_INTR_DESCS + (PAGE_SIZE * num_possible_cpus())) {
 		return ept_map_posted_intr_desc_page(vcpu, make_write, gpa);
 	}
 

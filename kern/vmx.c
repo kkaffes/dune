@@ -2177,12 +2177,12 @@ __init int vmx_init(void)
 
 	apic_init();
 
-        virtual_apic_pages = kmalloc(sizeof(void *) * num_online_cpus(), GFP_KERNEL);
-        posted_interrupt_descriptors = kmalloc(sizeof(*posted_interrupt_descriptors) * num_online_cpus(), GFP_KERNEL);
+        virtual_apic_pages = kmalloc(sizeof(void *) * num_possible_cpus(), GFP_KERNEL);
+        posted_interrupt_descriptors = kmalloc(sizeof(*posted_interrupt_descriptors) * num_possible_cpus(), GFP_KERNEL);
         
 	//the descriptors need to be in a contiguous region of memory so that they can easily
 	//be accessed by non-root mode
-        order = get_log2(num_online_cpus());
+        order = get_log2(num_possible_cpus());
         if (order == -1) return -ENOMEM;
 	posted_interrupt_desc_region = (void *)__get_free_pages(GFP_KERNEL, order);
 
